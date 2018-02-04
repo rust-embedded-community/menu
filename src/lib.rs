@@ -17,6 +17,7 @@ pub struct Item<'a> {
 
 /// A Menu is made of Items
 pub struct Menu<'a> {
+    pub label: &'a str,
     pub items: &'a [&'a Item<'a>],
     pub entry: Option<MenuCallbackFn>,
     pub exit: Option<MenuCallbackFn>,
@@ -35,26 +36,47 @@ where
     output: &'a mut T,
 }
 
+enum Outcome {
+    CommandProcessed,
+    NeedMore,
+}
+
 impl<'a, T> Runner<'a, T>
 where
     T: core::fmt::Write,
 {
     pub fn new(menu: &'a Menu<'a>, buffer: &'a mut [u8], output: &'a mut T) -> Runner<'a, T> {
-        write!(output, "> ").unwrap();
         if let Some(cb_fn) = menu.entry {
             cb_fn(menu);
         }
-        Runner {
+        let mut r = Runner {
             menus: [Some(menu), None, None, None],
             depth: 0,
             buffer,
             used: 0,
             output,
+        };
+        r.prompt();
+        r
+    }
+
+    pub fn prompt(&mut self) {
+        write!(self.output, "\n").unwrap();
+        if self.depth != 0 {
+            let mut depth = 1;
+            while depth <= self.depth {
+                if depth > 1 {
+                    write!(self.output, "/").unwrap();
+                }
+                write!(self.output, "/{}", self.menus[depth].unwrap().label).unwrap();
+                depth += 1;
+            }
         }
+        write!(self.output, "> ").unwrap();
     }
 
     pub fn input_byte(&mut self, input: u8) {
-        if input == 0x0A {
+        let outcome = if input == 0x0A {
             if let Ok(s) = core::str::from_utf8(&self.buffer[0..self.used]) {
                 if s == "help" {
                     let menu = self.menus[self.depth].unwrap();
@@ -69,9 +91,7 @@ where
                         writeln!(self.output, "exit - leave this menu.").unwrap();
                     }
                     writeln!(self.output, "help - print this help text.").unwrap();
-                    self.used = 0;
-                    writeln!(self.output).unwrap();
-                    write!(self.output, "> ").unwrap();
+                    Outcome::CommandProcessed
                 } else if s == "exit" && self.depth != 0 {
                     if self.depth == self.menus.len() {
                         writeln!(self.output, "Can't enter menu - structure too deep.").unwrap();
@@ -79,9 +99,7 @@ where
                         self.menus[self.depth] = None;
                         self.depth -= 1;
                     }
-                    self.used = 0;
-                    writeln!(self.output).unwrap();
-                    write!(self.output, "> ").unwrap();
+                    Outcome::CommandProcessed
                 } else {
                     let mut parts = s.split(' ');
                     if let Some(cmd) = parts.next() {
@@ -89,7 +107,6 @@ where
                         let menu = self.menus[self.depth].unwrap();
                         for item in menu.items {
                             if cmd == item.command {
-                                writeln!(self.output, "You selected {}", item.command).unwrap();
                                 match item.item_type {
                                     ItemType::Callback(f) => f(menu, item, s),
                                     ItemType::Menu(m) => {
@@ -105,25 +122,30 @@ where
                             writeln!(self.output, "Command {:?} not found. Try 'help'.", cmd)
                                 .unwrap();
                         }
-                        self.used = 0;
-                        writeln!(self.output).unwrap();
-                        write!(self.output, "> ").unwrap();
+                        Outcome::CommandProcessed
                     } else {
-                        self.used = 0;
                         writeln!(self.output, "Input empty").unwrap();
-                        write!(self.output, "> ").unwrap();
+                        Outcome::CommandProcessed
                     }
                 }
             } else {
-                self.used = 0;
                 writeln!(self.output, "Input not valid UTF8").unwrap();
-                write!(self.output, "> ").unwrap();
+                Outcome::CommandProcessed
             }
         } else if self.used < self.buffer.len() {
             self.buffer[self.used] = input;
             self.used += 1;
+            Outcome::NeedMore
         } else {
             writeln!(self.output, "Buffer overflow!").unwrap();
+            Outcome::NeedMore
+        };
+        match outcome {
+            Outcome::CommandProcessed => {
+                self.used = 0;
+                self.prompt();
+            }
+            Outcome::NeedMore => {}
         }
     }
 }

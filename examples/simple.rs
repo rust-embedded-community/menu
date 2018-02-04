@@ -22,6 +22,7 @@ const ENTER_ITEM: Item = Item {
 };
 
 const ROOT_MENU: Menu = Menu {
+    label: "root",
     items: &[&FOO_ITEM, &BAR_ITEM, &ENTER_ITEM],
     entry: Some(enter_root),
     exit: Some(exit_root),
@@ -40,6 +41,7 @@ const QUUX_ITEM: Item = Item {
 };
 
 const SUB_MENU: Menu = Menu {
+    label: "sub",
     items: &[&BAZ_ITEM, &QUUX_ITEM],
     entry: Some(enter_sub),
     exit: Some(exit_sub),
