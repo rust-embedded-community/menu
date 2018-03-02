@@ -33,7 +33,7 @@ where
     /// Maximum four levels deep
     menus: [Option<&'a Menu<'a>>; 4],
     depth: usize,
-    output: &'a mut T,
+    pub output: &'a mut T,
 }
 
 enum Outcome {
@@ -76,7 +76,12 @@ where
     }
 
     pub fn input_byte(&mut self, input: u8) {
-        let outcome = if input == 0x0A {
+        // Strip carriage returns
+        if input == 0x0A {
+            return;
+        }
+        let outcome = if input == 0x0D {
+            write!(self.output, "\n").unwrap();
             if let Ok(s) = core::str::from_utf8(&self.buffer[0..self.used]) {
                 if s == "help" {
                     let menu = self.menus[self.depth].unwrap();
