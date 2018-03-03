@@ -3,44 +3,44 @@ extern crate menu;
 use std::io::{self, Read, Write};
 use menu::*;
 
-const FOO_ITEM: Item = Item {
+const FOO_ITEM: Item<Output> = Item {
     item_type: ItemType::Callback(select_foo),
     command: "foo",
     help: Some("makes a foo appear"),
 };
 
-const BAR_ITEM: Item = Item {
+const BAR_ITEM: Item<Output> = Item {
     item_type: ItemType::Callback(select_bar),
     command: "bar",
     help: Some("fandoggles a bar"),
 };
 
-const ENTER_ITEM: Item = Item {
+const ENTER_ITEM: Item<Output> = Item {
     item_type: ItemType::Menu(&SUB_MENU),
     command: "sub",
     help: Some("enter sub-menu"),
 };
 
-const ROOT_MENU: Menu = Menu {
+const ROOT_MENU: Menu<Output> = Menu {
     label: "root",
     items: &[&FOO_ITEM, &BAR_ITEM, &ENTER_ITEM],
     entry: Some(enter_root),
     exit: Some(exit_root),
 };
 
-const BAZ_ITEM: Item = Item {
+const BAZ_ITEM: Item<Output> = Item {
     item_type: ItemType::Callback(select_baz),
     command: "baz",
     help: Some("thingamobob a baz"),
 };
 
-const QUUX_ITEM: Item = Item {
+const QUUX_ITEM: Item<Output> = Item {
     item_type: ItemType::Callback(select_quux),
     command: "quux",
     help: Some("maximum quux"),
 };
 
-const SUB_MENU: Menu = Menu {
+const SUB_MENU: Menu<Output> = Menu {
     label: "sub",
     items: &[&BAZ_ITEM, &QUUX_ITEM],
     entry: Some(enter_sub),
@@ -66,40 +66,44 @@ fn main() {
         let mut ch = [0x00u8; 1];
         // Wait for char
         if let Ok(_) = io::stdin().read(&mut ch) {
+            // Fix newlines
+            if ch[0] == 0x0A {
+                ch[0] = 0x0D;
+            }
             // Feed char to runner
             r.input_byte(ch[0]);
         }
     }
 }
 
-fn enter_root(_menu: &Menu) {
+fn enter_root(_menu: &Menu<Output>) {
     println!("In enter_root");
 }
 
-fn exit_root(_menu: &Menu) {
+fn exit_root(_menu: &Menu<Output>) {
     println!("In exit_root");
 }
 
-fn select_foo<'a>(_menu: &Menu, _item: &Item, input: &str) {
+fn select_foo<'a>(_menu: &Menu<Output>, _item: &Item<Output>, input: &str, _context: &mut Output) {
     println!("In select_foo: {}", input);
 }
 
-fn select_bar<'a>(_menu: &Menu, _item: &Item, input: &str) {
+fn select_bar<'a>(_menu: &Menu<Output>, _item: &Item<Output>, input: &str, _context: &mut Output) {
     println!("In select_bar: {}", input);
 }
 
-fn enter_sub(_menu: &Menu) {
+fn enter_sub(_menu: &Menu<Output>) {
     println!("In enter_sub");
 }
 
-fn exit_sub(_menu: &Menu) {
+fn exit_sub(_menu: &Menu<Output>) {
     println!("In exit_sub");
 }
 
-fn select_baz<'a>(_menu: &Menu, _item: &Item, input: &str) {
+fn select_baz<'a>(_menu: &Menu<Output>, _item: &Item<Output>, input: &str, _context: &mut Output) {
     println!("In select_baz: {}", input);
 }
 
-fn select_quux<'a>(_menu: &Menu, _item: &Item, input: &str) {
+fn select_quux<'a>(_menu: &Menu<Output>, _item: &Item<Output>, input: &str, _context: &mut Output) {
     println!("In select_quux: {}", input);
 }
