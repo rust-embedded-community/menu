@@ -1,26 +1,35 @@
 #![no_std]
 
-type MenuCallbackFn = fn(menu: &Menu);
-type ItemCallbackFn = fn(menu: &Menu, item: &Item, args: &str);
+type MenuCallbackFn<T> = fn(menu: &Menu<T>);
+type ItemCallbackFn<T> = fn(menu: &Menu<T>, item: &Item<T>, args: &str, context: &mut T);
 
-pub enum ItemType<'a> {
-    Callback(ItemCallbackFn),
-    Menu(&'a Menu<'a>),
+pub enum ItemType<'a, T>
+where
+    T: 'a,
+{
+    Callback(ItemCallbackFn<T>),
+    Menu(&'a Menu<'a, T>),
 }
 
 /// Menu Item
-pub struct Item<'a> {
+pub struct Item<'a, T>
+where
+    T: 'a,
+{
     pub command: &'a str,
     pub help: Option<&'a str>,
-    pub item_type: ItemType<'a>,
+    pub item_type: ItemType<'a, T>,
 }
 
 /// A Menu is made of Items
-pub struct Menu<'a> {
+pub struct Menu<'a, T>
+where
+    T: 'a,
+{
     pub label: &'a str,
-    pub items: &'a [&'a Item<'a>],
-    pub entry: Option<MenuCallbackFn>,
-    pub exit: Option<MenuCallbackFn>,
+    pub items: &'a [&'a Item<'a, T>],
+    pub entry: Option<MenuCallbackFn<T>>,
+    pub exit: Option<MenuCallbackFn<T>>,
 }
 
 pub struct Runner<'a, T>
@@ -31,7 +40,7 @@ where
     buffer: &'a mut [u8],
     used: usize,
     /// Maximum four levels deep
-    menus: [Option<&'a Menu<'a>>; 4],
+    menus: [Option<&'a Menu<'a, T>>; 4],
     depth: usize,
     pub output: &'a mut T,
 }
@@ -45,7 +54,7 @@ impl<'a, T> Runner<'a, T>
 where
     T: core::fmt::Write,
 {
-    pub fn new(menu: &'a Menu<'a>, buffer: &'a mut [u8], output: &'a mut T) -> Runner<'a, T> {
+    pub fn new(menu: &'a Menu<'a, T>, buffer: &'a mut [u8], output: &'a mut T) -> Runner<'a, T> {
         if let Some(cb_fn) = menu.entry {
             cb_fn(menu);
         }
@@ -113,7 +122,7 @@ where
                         for item in menu.items {
                             if cmd == item.command {
                                 match item.item_type {
-                                    ItemType::Callback(f) => f(menu, item, s),
+                                    ItemType::Callback(f) => f(menu, item, s, &mut self.output),
                                     ItemType::Menu(m) => {
                                         self.depth += 1;
                                         self.menus[self.depth] = Some(m);
