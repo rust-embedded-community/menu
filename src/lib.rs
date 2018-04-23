@@ -146,9 +146,16 @@ where
                 writeln!(self.output, "Input not valid UTF8").unwrap();
                 Outcome::CommandProcessed
             }
+        } else if input == 0x7F {
+            if self.used > 0 {
+                write!(self.output, "\u{007F} \u{007F}").unwrap();
+                self.used -= 1;
+            }
+            Outcome::NeedMore
         } else if self.used < self.buffer.len() {
             self.buffer[self.used] = input;
             self.used += 1;
+            write!(self.output, "{}", input as char).unwrap();
             Outcome::NeedMore
         } else {
             writeln!(self.output, "Buffer overflow!").unwrap();
