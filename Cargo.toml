@@ -2,5 +2,7 @@
 name = "menu"
 version = "0.1.0"
 authors = ["Jonathan 'theJPster' Pallant <github@thejpster.org.uk>"]
+description = "A simple #[no_std] command line interface."
+license = "MIT or Apache 2"
 
 [dependencies]
