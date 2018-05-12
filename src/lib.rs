@@ -42,7 +42,7 @@ where
     /// Maximum four levels deep
     menus: [Option<&'a Menu<'a, T>>; 4],
     depth: usize,
-    pub output: &'a mut T,
+    pub context: &'a mut T,
 }
 
 enum Outcome {
@@ -54,7 +54,7 @@ impl<'a, T> Runner<'a, T>
 where
     T: core::fmt::Write,
 {
-    pub fn new(menu: &'a Menu<'a, T>, buffer: &'a mut [u8], output: &'a mut T) -> Runner<'a, T> {
+    pub fn new(menu: &'a Menu<'a, T>, buffer: &'a mut [u8], context: &'a mut T) -> Runner<'a, T> {
         if let Some(cb_fn) = menu.entry {
             cb_fn(menu);
         }
@@ -63,25 +63,25 @@ where
             depth: 0,
             buffer,
             used: 0,
-            output,
+            context,
         };
         r.prompt();
         r
     }
 
     pub fn prompt(&mut self) {
-        write!(self.output, "\n").unwrap();
+        write!(self.context, "\n").unwrap();
         if self.depth != 0 {
             let mut depth = 1;
             while depth <= self.depth {
                 if depth > 1 {
-                    write!(self.output, "/").unwrap();
+                    write!(self.context, "/").unwrap();
                 }
-                write!(self.output, "/{}", self.menus[depth].unwrap().label).unwrap();
+                write!(self.context, "/{}", self.menus[depth].unwrap().label).unwrap();
                 depth += 1;
             }
         }
-        write!(self.output, "> ").unwrap();
+        write!(self.context, "> ").unwrap();
     }
 
     pub fn input_byte(&mut self, input: u8) {
@@ -90,25 +90,25 @@ where
             return;
         }
         let outcome = if input == 0x0D {
-            write!(self.output, "\n").unwrap();
+            write!(self.context, "\n").unwrap();
             if let Ok(s) = core::str::from_utf8(&self.buffer[0..self.used]) {
                 if s == "help" {
                     let menu = self.menus[self.depth].unwrap();
                     for item in menu.items {
                         if let Some(help) = item.help {
-                            writeln!(self.output, "{} - {}", item.command, help).unwrap();
+                            writeln!(self.context, "{} - {}", item.command, help).unwrap();
                         } else {
-                            writeln!(self.output, "{}", item.command).unwrap();
+                            writeln!(self.context, "{}", item.command).unwrap();
                         }
                     }
                     if self.depth != 0 {
-                        writeln!(self.output, "exit - leave this menu.").unwrap();
+                        writeln!(self.context, "exit - leave this menu.").unwrap();
                     }
-                    writeln!(self.output, "help - print this help text.").unwrap();
+                    writeln!(self.context, "help - print this help text.").unwrap();
                     Outcome::CommandProcessed
                 } else if s == "exit" && self.depth != 0 {
                     if self.depth == self.menus.len() {
-                        writeln!(self.output, "Can't enter menu - structure too deep.").unwrap();
+                        writeln!(self.context, "Can't enter menu - structure too deep.").unwrap();
                     } else {
                         self.menus[self.depth] = None;
                         self.depth -= 1;
@@ -122,7 +122,7 @@ where
                         for item in menu.items {
                             if cmd == item.command {
                                 match item.item_type {
-                                    ItemType::Callback(f) => f(menu, item, s, &mut self.output),
+                                    ItemType::Callback(f) => f(menu, item, s, &mut self.context),
                                     ItemType::Menu(m) => {
                                         self.depth += 1;
                                         self.menus[self.depth] = Some(m);
@@ -133,33 +133,33 @@ where
                             }
                         }
                         if !found {
-                            writeln!(self.output, "Command {:?} not found. Try 'help'.", cmd)
+                            writeln!(self.context, "Command {:?} not found. Try 'help'.", cmd)
                                 .unwrap();
                         }
                         Outcome::CommandProcessed
                     } else {
-                        writeln!(self.output, "Input empty").unwrap();
+                        writeln!(self.context, "Input empty").unwrap();
                         Outcome::CommandProcessed
                     }
                 }
             } else {
-                writeln!(self.output, "Input not valid UTF8").unwrap();
+                writeln!(self.context, "Input not valid UTF8").unwrap();
                 Outcome::CommandProcessed
             }
         } else if input == 0x08 {
             // Handling backspace
             if self.used > 0 {
-                write!(self.output, "\u{0008} \u{0008}").unwrap();
+                write!(self.context, "\u{0008} \u{0008}").unwrap();
                 self.used -= 1;
             }
             Outcome::NeedMore
         } else if self.used < self.buffer.len() {
             self.buffer[self.used] = input;
             self.used += 1;
-            write!(self.output, "{}", input as char).unwrap();
+            write!(self.context, "{}", input as char).unwrap();
             Outcome::NeedMore
         } else {
-            writeln!(self.output, "Buffer overflow!").unwrap();
+            writeln!(self.context, "Buffer overflow!").unwrap();
             Outcome::NeedMore
         };
         match outcome {
