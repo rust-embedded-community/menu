@@ -65,12 +65,14 @@ where
             used: 0,
             context,
         };
-        r.prompt();
+        r.prompt(true);
         r
     }
 
-    pub fn prompt(&mut self) {
-        write!(self.context, "\n").unwrap();
+    pub fn prompt(&mut self, newline: bool) {
+        if newline {
+            write!(self.context, "\n").unwrap();
+        }
         if self.depth != 0 {
             let mut depth = 1;
             while depth <= self.depth {
@@ -156,7 +158,19 @@ where
         } else if self.used < self.buffer.len() {
             self.buffer[self.used] = input;
             self.used += 1;
-            write!(self.context, "{}", input as char).unwrap();
+
+            let valid = if let Ok(_) = core::str::from_utf8(&self.buffer[0..self.used]) {
+                true
+            } else {
+                false
+            };
+            if valid {
+                write!(self.context, "\r").unwrap();
+                self.prompt(false);
+            }
+            if let Ok(s) = core::str::from_utf8(&self.buffer[0..self.used]) {
+                write!(self.context, "{}", s).unwrap();
+            }
             Outcome::NeedMore
         } else {
             writeln!(self.context, "Buffer overflow!").unwrap();
@@ -165,7 +179,7 @@ where
         match outcome {
             Outcome::CommandProcessed => {
                 self.used = 0;
-                self.prompt();
+                self.prompt(true);
             }
             Outcome::NeedMore => {}
         }
