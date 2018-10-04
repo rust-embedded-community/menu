@@ -76,11 +76,11 @@ fn main() {
     }
 }
 
-fn enter_root(_menu: &Menu<Output>) {
+fn enter_root(_menu: &Menu<Output>, _ctx: &mut Output) {
     println!("In enter_root");
 }
 
-fn exit_root(_menu: &Menu<Output>) {
+fn exit_root(_menu: &Menu<Output>, _ctx: &mut Output) {
     println!("In exit_root");
 }
 
@@ -92,11 +92,11 @@ fn select_bar<'a>(_menu: &Menu<Output>, _item: &Item<Output>, input: &str, _cont
     println!("In select_bar: {}", input);
 }
 
-fn enter_sub(_menu: &Menu<Output>) {
+fn enter_sub(_menu: &Menu<Output>, _ctx: &mut Output) {
     println!("In enter_sub");
 }
 
-fn exit_sub(_menu: &Menu<Output>) {
+fn exit_sub(_menu: &Menu<Output>, _ctx: &mut Output) {
     println!("In exit_sub");
 }
 
