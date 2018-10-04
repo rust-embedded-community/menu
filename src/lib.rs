@@ -1,6 +1,6 @@
 #![no_std]
 
-type MenuCallbackFn<T> = fn(menu: &Menu<T>);
+type MenuCallbackFn<T> = fn(menu: &Menu<T>, context: &mut T);
 type ItemCallbackFn<T> = fn(menu: &Menu<T>, item: &Item<T>, args: &str, context: &mut T);
 
 pub enum ItemType<'a, T>
@@ -56,7 +56,7 @@ where
 {
     pub fn new(menu: &'a Menu<'a, T>, buffer: &'a mut [u8], context: &'a mut T) -> Runner<'a, T> {
         if let Some(cb_fn) = menu.entry {
-            cb_fn(menu);
+            cb_fn(menu, context);
         }
         let mut r = Runner {
             menus: [Some(menu), None, None, None],
@@ -96,25 +96,30 @@ where
             if let Ok(s) = core::str::from_utf8(&self.buffer[0..self.used]) {
                 if s == "help" {
                     let menu = self.menus[self.depth].unwrap();
+                    let mut max_len = 1;
+                    for item in menu.items {
+                        max_len = max_len.max(item.command.len());
+                    }
                     for item in menu.items {
                         if let Some(help) = item.help {
-                            writeln!(self.context, "{} - {}", item.command, help).unwrap();
+                            writeln!(self.context, "* {:width$}  - {}", item.command, help, width=max_len).unwrap();
                         } else {
-                            writeln!(self.context, "{}", item.command).unwrap();
+                            writeln!(self.context, "* {}", item.command).unwrap();
                         }
                     }
                     if self.depth != 0 {
-                        writeln!(self.context, "exit - leave this menu.").unwrap();
+                        writeln!(self.context, "* {:width$}  - leave this menu.", "exit", width=max_len).unwrap();
                     }
-                    writeln!(self.context, "help - print this help text.").unwrap();
+                    writeln!(self.context, "* {:width$}  - print this help text.", "help", width=max_len).unwrap();
                     Outcome::CommandProcessed
-                } else if s == "exit" && self.depth != 0 {
-                    if self.depth == self.menus.len() {
-                        writeln!(self.context, "Can't enter menu - structure too deep.").unwrap();
-                    } else {
-                        self.menus[self.depth] = None;
-                        self.depth -= 1;
+                } else if s == "exit" && self.depth > 0 {
+                    // Can't be None if we've managed to get to this level
+                    let menu = self.menus[self.depth].unwrap();
+                    self.menus[self.depth] = None;
+                    if let Some(cb_fn) = menu.exit {
+                        cb_fn(menu, &mut self.context);
                     }
+                    self.depth -= 1;
                     Outcome::CommandProcessed
                 } else {
                     let mut parts = s.split(' ');
@@ -126,8 +131,16 @@ where
                                 match item.item_type {
                                     ItemType::Callback(f) => f(menu, item, s, &mut self.context),
                                     ItemType::Menu(m) => {
-                                        self.depth += 1;
-                                        self.menus[self.depth] = Some(m);
+                                        if (self.depth + 1) >= self.menus.len() {
+                                            writeln!(self.context, "Can't enter menu - structure too deep.").unwrap();
+                                        } else {
+                                            // self.menus[0] is the root menu, so go up one level first.
+                                            self.depth += 1;
+                                            self.menus[self.depth] = Some(m);
+                                            if let Some(cb_fn) = m.entry {
+                                                cb_fn(m, &mut self.context);
+                                            }
+                                        }
                                     }
                                 }
                                 found = true;
