@@ -409,7 +409,7 @@ where
     fn print_short_help(&mut self, item: &Item<T>) {
         match item.item_type {
             ItemType::Callback { parameters, .. } => {
-                write!(self.context, "\t{}", item.command).unwrap();
+                write!(self.context, "  {}", item.command).unwrap();
                 if !parameters.is_empty() {
                     for param in parameters.iter() {
                         match param {
@@ -435,10 +435,10 @@ where
                 }
             }
             ItemType::Menu(_menu) => {
-                write!(self.context, "\t{}", item.command).unwrap();
+                write!(self.context, "  {}", item.command).unwrap();
             }
             ItemType::_Dummy => {
-                write!(self.context, "\t{}", item.command).unwrap();
+                write!(self.context, "  {}", item.command).unwrap();
             }
         }
         if let Some(help) = item.help {
@@ -451,7 +451,7 @@ where
         writeln!(self.context, "SUMMARY:").unwrap();
         match item.item_type {
             ItemType::Callback { parameters, .. } => {
-                write!(self.context, "\t{}", item.command).unwrap();
+                write!(self.context, "  {}", item.command).unwrap();
                 if !parameters.is_empty() {
                     for param in parameters.iter() {
                         match param {
@@ -483,7 +483,7 @@ where
                             } => {
                                 writeln!(
                                     self.context,
-                                    "\t<{0}>\n\t\t- {1}",
+                                    "  <{0}>\n    - {1}",
                                     parameter_name,
                                     help.unwrap_or(""),
                                 )
@@ -495,7 +495,7 @@ where
                             } => {
                                 writeln!(
                                     self.context,
-                                    "\t<{0}>\n\t\t- {1}",
+                                    "  <{0}>\n    - {1}",
                                     parameter_name,
                                     help.unwrap_or("No help text found"),
                                 )
@@ -507,7 +507,7 @@ where
                             } => {
                                 writeln!(
                                     self.context,
-                                    "\t--{0}\n\t\t- {1}",
+                                    "  --{0}\n    - {1}",
                                     parameter_name,
                                     help.unwrap_or("No help text found"),
                                 )
@@ -520,7 +520,7 @@ where
                             } => {
                                 writeln!(
                                     self.context,
-                                    "\t--{0}={1}\n\t\t- {2}",
+                                    "  --{0}={1}\n    - {2}",
                                     parameter_name,
                                     argument_name,
                                     help.unwrap_or("No help text found"),
@@ -532,10 +532,10 @@ where
                 }
             }
             ItemType::Menu(_menu) => {
-                write!(self.context, "\t{}", item.command).unwrap();
+                write!(self.context, "  {}", item.command).unwrap();
             }
             ItemType::_Dummy => {
-                write!(self.context, "\t{}", item.command).unwrap();
+                write!(self.context, "  {}", item.command).unwrap();
             }
         }
         if let Some(help) = item.help {
