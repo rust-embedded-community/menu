@@ -1,7 +1,15 @@
+//! # Menu
+//!
+//! A basic command-line interface for `#![no_std]` Rust programs. Peforms
+//! zero heap allocation.
 #![no_std]
+#![deny(missing_docs)]
 
-type MenuCallbackFn<T> = fn(menu: &Menu<T>, context: &mut T);
-type ItemCallbackFn<T> = fn(menu: &Menu<T>, item: &Item<T>, args: &[&str], context: &mut T);
+/// The type of function we call when we enter/exit a menu.
+pub type MenuCallbackFn<T> = fn(menu: &Menu<T>, context: &mut T);
+
+/// The type of function we call when we a valid command has been entered.
+pub type ItemCallbackFn<T> = fn(menu: &Menu<T>, item: &Item<T>, args: &[&str], context: &mut T);
 
 #[derive(Debug)]
 /// Describes a parameter to the command
@@ -14,7 +22,9 @@ pub enum Parameter<'a> {
     Named(&'a str),
     /// A named parameter with argument (e.g. `--mode=foo` or `--level=3`)
     NamedValue {
+        /// The bit that comes after the `--`
         parameter_name: &'a str,
+        /// The bit that comes after the `--name=`, e.g. `INT` or `FILE`. It's mostly for help text.
         argument_name: &'a str,
     },
 }
@@ -25,35 +35,54 @@ pub enum ItemType<'a, T>
 where
     T: 'a,
 {
+    /// Call a function when this command is entered
     Callback {
+        /// The function to call
         function: ItemCallbackFn<T>,
+        /// The list of parameters for this function. Pass an empty list if there aren't any.
         parameters: &'a [Parameter<'a>],
     },
+    /// This item is a sub-menu you can enter
     Menu(&'a Menu<'a, T>),
+    /// Internal use only - do not use
     _Dummy,
 }
 
-/// Menu Item
+/// An `Item` is a what our menus are made from. Each item has a `name` which
+/// you have to enter to select this item. Each item can also have zero or
+/// more parameters, and some optional help text.
 pub struct Item<'a, T>
 where
     T: 'a,
 {
+    /// The word you need to enter to activate this item. It is recommended
+    /// that you avoid whitespace in this string.
     pub command: &'a str,
+    /// Optional help text. Printed if you enter `help`.
     pub help: Option<&'a str>,
+    /// The type of this item - menu, callback, etc.
     pub item_type: ItemType<'a, T>,
 }
 
-/// A Menu is made of Items
+/// A `Menu` is made of one or more `Item`s.
 pub struct Menu<'a, T>
 where
     T: 'a,
 {
+    /// Each menu has a label which is visible in the prompt, unless you are
+    /// the root menu.
     pub label: &'a str,
+    /// A slice of menu items in this menu.
     pub items: &'a [&'a Item<'a, T>],
+    /// A function to call when this menu is entered. If this is the root menu, this is called when the runner is created.
     pub entry: Option<MenuCallbackFn<T>>,
+    /// A function to call when this menu is exited. Never called for the root menu.
     pub exit: Option<MenuCallbackFn<T>>,
 }
 
+/// This structure handles the menu. You feed it bytes as they are read from
+/// the console and it executes menu actions when commands are typed in
+/// (followed by Enter).
 pub struct Runner<'a, T>
 where
     T: core::fmt::Write,
@@ -64,7 +93,8 @@ where
     /// Maximum four levels deep
     menus: [Option<&'a Menu<'a, T>>; 4],
     depth: usize,
-    pub context: &'a mut T,
+    /// The context object the `Runner` carries around.
+    pub context: T,
 }
 
 /// Looks for the named parameter in the parameter list of the item, then
@@ -192,9 +222,13 @@ impl<'a, T> Runner<'a, T>
 where
     T: core::fmt::Write,
 {
-    pub fn new(menu: &'a Menu<'a, T>, buffer: &'a mut [u8], context: &'a mut T) -> Runner<'a, T> {
+    /// Create a new `Runner`. You need to supply a top-level menu, and a
+    /// buffer that the `Runner` can use. Feel free to pass anything as the
+    /// `context` type - the only requirement is that the `Runner` can
+    /// `write!` to the context, which it will do for all text output.
+    pub fn new(menu: &'a Menu<'a, T>, buffer: &'a mut [u8], mut context: T) -> Runner<'a, T> {
         if let Some(cb_fn) = menu.entry {
-            cb_fn(menu, context);
+            cb_fn(menu, &mut context);
         }
         let mut r = Runner {
             menus: [Some(menu), None, None, None],
@@ -207,6 +241,8 @@ where
         r
     }
 
+    /// Print out a new command prompt, including sub-menu names if
+    /// applicable.
     pub fn prompt(&mut self, newline: bool) {
         if newline {
             writeln!(self.context).unwrap();
@@ -224,6 +260,9 @@ where
         write!(self.context, "> ").unwrap();
     }
 
+    /// Add a byte to the menu runner's buffer. If this byte is a
+    /// carriage-return, the buffer is scanned and the appropriate action
+    /// performed.
     pub fn input_byte(&mut self, input: u8) {
         // Strip carriage returns
         if input == 0x0A {
@@ -271,8 +310,10 @@ where
         }
     }
 
+    /// Scan the buffer and do the right thing based on its contents.
     fn process_command(&mut self) -> Outcome {
         if let Ok(command_line) = core::str::from_utf8(&self.buffer[0..self.used]) {
+            // We have a valid string
             if command_line == "help" {
                 let menu = self.menus[self.depth].unwrap();
                 for item in menu.items {
@@ -313,7 +354,7 @@ where
                                     function,
                                     parameters,
                                 } => Self::call_function(
-                                    self.context,
+                                    &mut self.context,
                                     function,
                                     parameters,
                                     menu,
@@ -342,7 +383,8 @@ where
                 }
             }
         } else {
-            writeln!(self.context, "Input not valid UTF8").unwrap();
+            // Hmm ..  we did not have a valid string
+            writeln!(self.context, "Input was not valid UTF-8").unwrap();
             Outcome::CommandProcessed
         }
     }
@@ -435,10 +477,12 @@ where
                                 }
                             }
                             Parameter::NamedValue { parameter_name, .. } => {
-                                if let Some(name) = arg[2..].split('=').next() {
-                                    if name == *parameter_name {
-                                        found = true;
-                                        break;
+                                if arg.contains('=') {
+                                    if let Some(name) = arg[2..].split('=').next() {
+                                        if name == *parameter_name {
+                                            found = true;
+                                            break;
+                                        }
                                     }
                                 }
                             }

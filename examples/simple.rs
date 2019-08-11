@@ -82,8 +82,7 @@ fn main() {
     window.scrollok(true);
     noecho();
     let mut buffer = [0u8; 64];
-    let mut o = Output(window);
-    let mut r = Runner::new(&ROOT_MENU, &mut buffer, &mut o);
+    let mut r = Runner::new(&ROOT_MENU, &mut buffer, Output(window));
     loop {
         match r.context.0.getch() {
             Some(Input::Character('\n')) => {
