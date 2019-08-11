@@ -10,10 +10,11 @@ const FOO_ITEM: Item<Output> = Item {
         parameters: &[
             Parameter::Mandatory("a"),
             Parameter::Optional("b"),
-            Parameter::Named {
-                parameter_name: "verbose",
-                argument_name: "VALUE",
-            },
+            Parameter::Named("verbose"),
+            // Parameter::NamedValue {
+            //     parameter_name: "level",
+            //     argument_name: "INT",
+            // },
         ],
     },
     command: "foo",
@@ -78,6 +79,7 @@ impl std::fmt::Write for Output {
 
 fn main() {
     let window = initscr();
+    window.scrollok(true);
     noecho();
     let mut buffer = [0u8; 64];
     let mut o = Output(window);
@@ -111,8 +113,38 @@ fn exit_root(_menu: &Menu<Output>, context: &mut Output) {
     writeln!(context, "In exit_root").unwrap();
 }
 
-fn select_foo<'a>(_menu: &Menu<Output>, _item: &Item<Output>, args: &[&str], context: &mut Output) {
+fn select_foo<'a>(menu: &Menu<Output>, item: &Item<Output>, args: &[&str], context: &mut Output) {
     writeln!(context, "In select_foo. Args = {:?}", args).unwrap();
+    writeln!(
+        context,
+        "a = {:?}",
+        ::menu::argument_finder(item, args, "a")
+    )
+    .unwrap();
+    writeln!(
+        context,
+        "b = {:?}",
+        ::menu::argument_finder(item, args, "b")
+    )
+    .unwrap();
+    writeln!(
+        context,
+        "verbose = {:?}",
+        ::menu::argument_finder(item, args, "verbose")
+    )
+    .unwrap();
+    writeln!(
+        context,
+        "level = {:?}",
+        ::menu::argument_finder(item, args, "level")
+    )
+    .unwrap();
+    writeln!(
+        context,
+        "no_such_arg = {:?}",
+        ::menu::argument_finder(item, args, "no_such_arg")
+    )
+    .unwrap();
 }
 
 fn select_bar<'a>(_menu: &Menu<Output>, _item: &Item<Output>, args: &[&str], context: &mut Output) {
