@@ -172,6 +172,10 @@ It contains multiple paragraphs and should be preceeded by the parameter list.
 
 * None
 
+### v0.3.1
+
+* Updated crate metadata
+
 ### v0.3.0
 
 * Parameter / Argument support
