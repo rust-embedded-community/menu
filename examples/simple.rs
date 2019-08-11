@@ -2,6 +2,7 @@ extern crate menu;
 
 use menu::*;
 use pancurses::{endwin, initscr, noecho, Input};
+use std::fmt::Write;
 
 const FOO_ITEM: Item<Output> = Item {
     item_type: ItemType::Callback {
@@ -102,34 +103,39 @@ fn main() {
     endwin();
 }
 
-fn enter_root(_menu: &Menu<Output>) {
-    println!("In enter_root");
+fn enter_root(_menu: &Menu<Output>, context: &mut Output) {
+    writeln!(context, "In enter_root").unwrap();
 }
 
-fn exit_root(_menu: &Menu<Output>) {
-    println!("In exit_root");
+fn exit_root(_menu: &Menu<Output>, context: &mut Output) {
+    writeln!(context, "In exit_root").unwrap();
 }
 
-fn select_foo<'a>(_menu: &Menu<Output>, _item: &Item<Output>, input: &str, _context: &mut Output) {
-    println!("In select_foo: {}", input);
+fn select_foo<'a>(_menu: &Menu<Output>, _item: &Item<Output>, args: &[&str], context: &mut Output) {
+    writeln!(context, "In select_foo. Args = {:?}", args).unwrap();
 }
 
-fn select_bar<'a>(_menu: &Menu<Output>, _item: &Item<Output>, input: &str, _context: &mut Output) {
-    println!("In select_bar: {}", input);
+fn select_bar<'a>(_menu: &Menu<Output>, _item: &Item<Output>, args: &[&str], context: &mut Output) {
+    writeln!(context, "In select_bar. Args = {:?}", args).unwrap();
 }
 
-fn enter_sub(_menu: &Menu<Output>) {
-    println!("In enter_sub");
+fn enter_sub(_menu: &Menu<Output>, context: &mut Output) {
+    writeln!(context, "In enter_sub").unwrap();
 }
 
-fn exit_sub(_menu: &Menu<Output>) {
-    println!("In exit_sub");
+fn exit_sub(_menu: &Menu<Output>, context: &mut Output) {
+    writeln!(context, "In exit_sub").unwrap();
 }
 
-fn select_baz<'a>(_menu: &Menu<Output>, _item: &Item<Output>, input: &str, _context: &mut Output) {
-    println!("In select_baz: {}", input);
+fn select_baz<'a>(_menu: &Menu<Output>, _item: &Item<Output>, args: &[&str], context: &mut Output) {
+    writeln!(context, "In select_baz: Args = {:?}", args).unwrap();
 }
 
-fn select_quux<'a>(_menu: &Menu<Output>, _item: &Item<Output>, input: &str, _context: &mut Output) {
-    println!("In select_quux: {}", input);
+fn select_quux<'a>(
+    _menu: &Menu<Output>,
+    _item: &Item<Output>,
+    args: &[&str],
+    context: &mut Output,
+) {
+    writeln!(context, "In select_quux: Args = {:?}", args).unwrap();
 }

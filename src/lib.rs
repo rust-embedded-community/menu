@@ -1,8 +1,9 @@
 #![no_std]
 
-type MenuCallbackFn<T> = fn(menu: &Menu<T>);
-type ItemCallbackFn<T> = fn(menu: &Menu<T>, item: &Item<T>, args: &str, context: &mut T);
+type MenuCallbackFn<T> = fn(menu: &Menu<T>, context: &mut T);
+type ItemCallbackFn<T> = fn(menu: &Menu<T>, item: &Item<T>, args: &[&str], context: &mut T);
 
+#[derive(Debug)]
 /// Describes a parameter to the command
 pub enum Parameter<'a> {
     Mandatory(&'a str),
@@ -24,6 +25,7 @@ where
         parameters: &'a [Parameter<'a>],
     },
     Menu(&'a Menu<'a, T>),
+    _Dummy,
 }
 
 /// Menu Item
@@ -71,7 +73,7 @@ where
 {
     pub fn new(menu: &'a Menu<'a, T>, buffer: &'a mut [u8], context: &'a mut T) -> Runner<'a, T> {
         if let Some(cb_fn) = menu.entry {
-            cb_fn(menu);
+            cb_fn(menu, context);
         }
         let mut r = Runner {
             menus: [Some(menu), None, None, None],
@@ -156,9 +158,19 @@ where
                     self.print_help(&item);
                 }
                 if self.depth != 0 {
-                    writeln!(self.context, "* exit - leave this menu.").unwrap();
+                    let item = Item {
+                        command: "exit",
+                        help: Some("leave this menu"),
+                        item_type: ItemType::_Dummy,
+                    };
+                    self.print_help(&item);
                 }
-                writeln!(self.context, "* help - print this help text").unwrap();
+                let item = Item {
+                    command: "help",
+                    help: Some("show this help"),
+                    item_type: ItemType::_Dummy,
+                };
+                self.print_help(&item);
                 Outcome::CommandProcessed
             } else if command_line == "exit" && self.depth != 0 {
                 if self.depth == self.menus.len() {
@@ -179,7 +191,8 @@ where
                                 ItemType::Callback {
                                     function,
                                     parameters,
-                                } => self.call_function(
+                                } => Self::call_function(
+                                    self.context,
                                     function,
                                     parameters,
                                     menu,
@@ -189,6 +202,9 @@ where
                                 ItemType::Menu(m) => {
                                     self.depth += 1;
                                     self.menus[self.depth] = Some(m);
+                                }
+                                ItemType::_Dummy => {
+                                    unreachable!();
                                 }
                             }
                             found = true;
@@ -214,7 +230,7 @@ where
         match item.item_type {
             ItemType::Callback { parameters, .. } => {
                 if !parameters.is_empty() {
-                    write!(self.context, "* {}", item.command).unwrap();
+                    write!(self.context, "{}", item.command).unwrap();
                     for param in parameters.iter() {
                         match param {
                             Parameter::Mandatory(name) => {
@@ -233,11 +249,14 @@ where
                         }
                     }
                 } else {
-                    write!(self.context, "* {}", item.command).unwrap();
+                    write!(self.context, "{}", item.command).unwrap();
                 }
             }
             ItemType::Menu(_menu) => {
-                write!(self.context, "* {}", item.command).unwrap();
+                write!(self.context, "{}", item.command).unwrap();
+            }
+            ItemType::_Dummy => {
+                write!(self.context, "{}", item.command).unwrap();
             }
         }
         if let Some(help) = item.help {
@@ -247,14 +266,53 @@ where
     }
 
     fn call_function(
-        &self,
-        _function: ItemCallbackFn<T>,
-        _parameters: &[Parameter],
-        _parent_menu: &Menu<T>,
-        _item: &Item<T>,
-        _command: &str,
+        context: &mut T,
+        callback_function: ItemCallbackFn<T>,
+        parameters: &[Parameter],
+        parent_menu: &Menu<T>,
+        item: &Item<T>,
+        command: &str,
     ) {
-
+        let mandatory_parameter_count = parameters
+            .iter()
+            .filter(|p| match p {
+                Parameter::Mandatory(_) => true,
+                _ => false,
+            })
+            .count();
+        if command.len() >= item.command.len() {
+            // Maybe arguments
+            let mut argument_buffer: [&str; 16] = [""; 16];
+            let mut argument_count = 0;
+            let mut positional_arguments = 0;
+            for (slot, arg) in argument_buffer
+                .iter_mut()
+                .zip(command[item.command.len()..].split_whitespace())
+            {
+                *slot = arg;
+                argument_count += 1;
+                if !arg.starts_with("--") {
+                    positional_arguments += 1;
+                }
+            }
+            if positional_arguments >= mandatory_parameter_count {
+                callback_function(
+                    parent_menu,
+                    item,
+                    &argument_buffer[0..argument_count],
+                    context,
+                );
+            } else {
+                writeln!(context, "Error: Insufficient arguments given").unwrap();
+            }
+        } else {
+            // Definitely no arguments
+            if mandatory_parameter_count == 0 {
+                callback_function(parent_menu, item, &[], context);
+            } else {
+                writeln!(context, "Error: Insufficient arguments given").unwrap();
+            }
+        }
     }
 }
 
