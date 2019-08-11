@@ -1,16 +1,29 @@
 extern crate menu;
 
-use std::io::{self, Read, Write};
 use menu::*;
+use pancurses::{endwin, initscr, noecho, Input};
 
 const FOO_ITEM: Item<Output> = Item {
-    item_type: ItemType::Callback(select_foo),
+    item_type: ItemType::Callback {
+        function: select_foo,
+        parameters: &[
+            Parameter::Mandatory("a"),
+            Parameter::Optional("b"),
+            Parameter::Named {
+                parameter_name: "verbose",
+                argument_name: "VALUE",
+            },
+        ],
+    },
     command: "foo",
     help: Some("makes a foo appear"),
 };
 
 const BAR_ITEM: Item<Output> = Item {
-    item_type: ItemType::Callback(select_bar),
+    item_type: ItemType::Callback {
+        function: select_bar,
+        parameters: &[],
+    },
     command: "bar",
     help: Some("fandoggles a bar"),
 };
@@ -29,13 +42,19 @@ const ROOT_MENU: Menu<Output> = Menu {
 };
 
 const BAZ_ITEM: Item<Output> = Item {
-    item_type: ItemType::Callback(select_baz),
+    item_type: ItemType::Callback {
+        function: select_baz,
+        parameters: &[],
+    },
     command: "baz",
     help: Some("thingamobob a baz"),
 };
 
 const QUUX_ITEM: Item<Output> = Item {
-    item_type: ItemType::Callback(select_quux),
+    item_type: ItemType::Callback {
+        function: select_quux,
+        parameters: &[],
+    },
     command: "quux",
     help: Some("maximum quux"),
 };
@@ -47,33 +66,40 @@ const SUB_MENU: Menu<Output> = Menu {
     exit: Some(exit_sub),
 };
 
-struct Output;
+struct Output(pancurses::Window);
 
 impl std::fmt::Write for Output {
     fn write_str(&mut self, s: &str) -> Result<(), std::fmt::Error> {
-        let mut stdout = io::stdout();
-        write!(stdout, "{}", s).unwrap();
-        stdout.flush().unwrap();
+        self.0.printw(s);
         Ok(())
     }
 }
 
 fn main() {
+    let window = initscr();
+    noecho();
     let mut buffer = [0u8; 64];
-    let mut o = Output;
+    let mut o = Output(window);
     let mut r = Runner::new(&ROOT_MENU, &mut buffer, &mut o);
     loop {
-        let mut ch = [0x00u8; 1];
-        // Wait for char
-        if let Ok(_) = io::stdin().read(&mut ch) {
-            // Fix newlines
-            if ch[0] == 0x0A {
-                ch[0] = 0x0D;
+        match r.context.0.getch() {
+            Some(Input::Character('\n')) => {
+                r.input_byte(b'\r');
             }
-            // Feed char to runner
-            r.input_byte(ch[0]);
+            Some(Input::Character(c)) => {
+                let mut buf = [0; 4];
+                for b in c.encode_utf8(&mut buf).bytes() {
+                    r.input_byte(b);
+                }
+            }
+            Some(Input::KeyDC) => break,
+            Some(input) => {
+                r.context.0.addstr(&format!("{:?}", input));
+            }
+            None => (),
         }
     }
+    endwin();
 }
 
 fn enter_root(_menu: &Menu<Output>) {

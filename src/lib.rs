@@ -3,11 +3,26 @@
 type MenuCallbackFn<T> = fn(menu: &Menu<T>);
 type ItemCallbackFn<T> = fn(menu: &Menu<T>, item: &Item<T>, args: &str, context: &mut T);
 
+/// Describes a parameter to the command
+pub enum Parameter<'a> {
+    Mandatory(&'a str),
+    Optional(&'a str),
+    Named {
+        parameter_name: &'a str,
+        argument_name: &'a str,
+    },
+}
+
+/// Do we enter a sub-menu when this command is entered, or call a specific
+/// function?
 pub enum ItemType<'a, T>
 where
     T: 'a,
 {
-    Callback(ItemCallbackFn<T>),
+    Callback {
+        function: ItemCallbackFn<T>,
+        parameters: &'a [Parameter<'a>],
+    },
     Menu(&'a Menu<'a, T>),
 }
 
@@ -71,7 +86,7 @@ where
 
     pub fn prompt(&mut self, newline: bool) {
         if newline {
-            write!(self.context, "\n").unwrap();
+            writeln!(self.context).unwrap();
         }
         if self.depth != 0 {
             let mut depth = 1;
@@ -92,64 +107,10 @@ where
             return;
         }
         let outcome = if input == 0x0D {
-            write!(self.context, "\n").unwrap();
-            if let Ok(s) = core::str::from_utf8(&self.buffer[0..self.used]) {
-                if s == "help" {
-                    let menu = self.menus[self.depth].unwrap();
-                    for item in menu.items {
-                        if let Some(help) = item.help {
-                            writeln!(self.context, "{} - {}", item.command, help).unwrap();
-                        } else {
-                            writeln!(self.context, "{}", item.command).unwrap();
-                        }
-                    }
-                    if self.depth != 0 {
-                        writeln!(self.context, "exit - leave this menu.").unwrap();
-                    }
-                    writeln!(self.context, "help - print this help text.").unwrap();
-                    Outcome::CommandProcessed
-                } else if s == "exit" && self.depth != 0 {
-                    if self.depth == self.menus.len() {
-                        writeln!(self.context, "Can't enter menu - structure too deep.").unwrap();
-                    } else {
-                        self.menus[self.depth] = None;
-                        self.depth -= 1;
-                    }
-                    Outcome::CommandProcessed
-                } else {
-                    let mut parts = s.split(' ');
-                    if let Some(cmd) = parts.next() {
-                        let mut found = false;
-                        let menu = self.menus[self.depth].unwrap();
-                        for item in menu.items {
-                            if cmd == item.command {
-                                match item.item_type {
-                                    ItemType::Callback(f) => f(menu, item, s, &mut self.context),
-                                    ItemType::Menu(m) => {
-                                        self.depth += 1;
-                                        self.menus[self.depth] = Some(m);
-                                    }
-                                }
-                                found = true;
-                                break;
-                            }
-                        }
-                        if !found {
-                            writeln!(self.context, "Command {:?} not found. Try 'help'.", cmd)
-                                .unwrap();
-                        }
-                        Outcome::CommandProcessed
-                    } else {
-                        writeln!(self.context, "Input empty").unwrap();
-                        Outcome::CommandProcessed
-                    }
-                }
-            } else {
-                writeln!(self.context, "Input not valid UTF8").unwrap();
-                Outcome::CommandProcessed
-            }
-        } else if input == 0x08 {
-            // Handling backspace
+            writeln!(self.context).unwrap();
+            self.process_command()
+        } else if (input == 0x08) || (input == 0x7F) {
+            // Handling backspace or delete
             if self.used > 0 {
                 write!(self.context, "\u{0008} \u{0008}").unwrap();
                 self.used -= 1;
@@ -159,15 +120,17 @@ where
             self.buffer[self.used] = input;
             self.used += 1;
 
-            let valid = if let Ok(_) = core::str::from_utf8(&self.buffer[0..self.used]) {
-                true
-            } else {
-                false
-            };
+            // We have to do this song and dance because `self.prompt()` needs
+            // a mutable reference to self, and we can't have that while
+            // holding a reference to the buffer at the same time.
+            // This line grabs the buffer, checks it's OK, then releases it again
+            let valid = core::str::from_utf8(&self.buffer[0..self.used]).is_ok();
+            // Now we've released the buffer, we can draw the prompt
             if valid {
                 write!(self.context, "\r").unwrap();
                 self.prompt(false);
             }
+            // Grab the buffer again to render it to the screen
             if let Ok(s) = core::str::from_utf8(&self.buffer[0..self.used]) {
                 write!(self.context, "{}", s).unwrap();
             }
@@ -183,6 +146,115 @@ where
             }
             Outcome::NeedMore => {}
         }
+    }
+
+    fn process_command(&mut self) -> Outcome {
+        if let Ok(command_line) = core::str::from_utf8(&self.buffer[0..self.used]) {
+            if command_line == "help" {
+                let menu = self.menus[self.depth].unwrap();
+                for item in menu.items {
+                    self.print_help(&item);
+                }
+                if self.depth != 0 {
+                    writeln!(self.context, "* exit - leave this menu.").unwrap();
+                }
+                writeln!(self.context, "* help - print this help text").unwrap();
+                Outcome::CommandProcessed
+            } else if command_line == "exit" && self.depth != 0 {
+                if self.depth == self.menus.len() {
+                    writeln!(self.context, "Can't enter menu - structure too deep.").unwrap();
+                } else {
+                    self.menus[self.depth] = None;
+                    self.depth -= 1;
+                }
+                Outcome::CommandProcessed
+            } else {
+                let mut parts = command_line.split(' ');
+                if let Some(cmd) = parts.next() {
+                    let mut found = false;
+                    let menu = self.menus[self.depth].unwrap();
+                    for item in menu.items {
+                        if cmd == item.command {
+                            match item.item_type {
+                                ItemType::Callback {
+                                    function,
+                                    parameters,
+                                } => self.call_function(
+                                    function,
+                                    parameters,
+                                    menu,
+                                    item,
+                                    command_line,
+                                ),
+                                ItemType::Menu(m) => {
+                                    self.depth += 1;
+                                    self.menus[self.depth] = Some(m);
+                                }
+                            }
+                            found = true;
+                            break;
+                        }
+                    }
+                    if !found {
+                        writeln!(self.context, "Command {:?} not found. Try 'help'.", cmd).unwrap();
+                    }
+                    Outcome::CommandProcessed
+                } else {
+                    writeln!(self.context, "Input empty").unwrap();
+                    Outcome::CommandProcessed
+                }
+            }
+        } else {
+            writeln!(self.context, "Input not valid UTF8").unwrap();
+            Outcome::CommandProcessed
+        }
+    }
+
+    fn print_help(&mut self, item: &Item<T>) {
+        match item.item_type {
+            ItemType::Callback { parameters, .. } => {
+                if !parameters.is_empty() {
+                    write!(self.context, "* {}", item.command).unwrap();
+                    for param in parameters.iter() {
+                        match param {
+                            Parameter::Mandatory(name) => {
+                                write!(self.context, " <{}>", name).unwrap();
+                            }
+                            Parameter::Optional(name) => {
+                                write!(self.context, " [ <{}> ]", name).unwrap();
+                            }
+                            Parameter::Named {
+                                parameter_name,
+                                argument_name,
+                            } => {
+                                write!(self.context, " [ --{}={} ]", parameter_name, argument_name)
+                                    .unwrap();
+                            }
+                        }
+                    }
+                } else {
+                    write!(self.context, "* {}", item.command).unwrap();
+                }
+            }
+            ItemType::Menu(_menu) => {
+                write!(self.context, "* {}", item.command).unwrap();
+            }
+        }
+        if let Some(help) = item.help {
+            write!(self.context, " - {}", help).unwrap();
+        }
+        writeln!(self.context).unwrap();
+    }
+
+    fn call_function(
+        &self,
+        _function: ItemCallbackFn<T>,
+        _parameters: &[Parameter],
+        _parent_menu: &Menu<T>,
+        _item: &Item<T>,
+        _command: &str,
+    ) {
+
     }
 }
 
