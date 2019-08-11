@@ -172,11 +172,17 @@ It contains multiple paragraphs and should be preceeded by the parameter list.
 
 * None
 
-### v0.2.0
+### v0.3.0
 
 * Parameter / Argument support
 * Re-worked help text system
 * Example uses `pancurses`
+* Remove use of fixed width (assumes a Western set with one byte per glyph)
+
+### v0.2.0
+
+* Add context to menu callback
+* Fix width of help text
 
 ### v0.1.0
 
