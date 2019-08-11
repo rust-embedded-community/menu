@@ -15,17 +15,34 @@ pub type ItemCallbackFn<T> = fn(menu: &Menu<T>, item: &Item<T>, args: &[&str], c
 /// Describes a parameter to the command
 pub enum Parameter<'a> {
     /// A mandatory positional parameter
-    Mandatory(&'a str),
+    Mandatory {
+        /// A name for this mandatory positional parameter
+        parameter_name: &'a str,
+        /// Help text
+        help: Option<&'a str>,
+    },
     /// An optional positional parameter. Must come after the mandatory positional arguments.
-    Optional(&'a str),
-    /// A named parameter with no argument (e.g. `--verbose` or `--dry-run`)
-    Named(&'a str),
-    /// A named parameter with argument (e.g. `--mode=foo` or `--level=3`)
+    Optional {
+        /// A name for this optional positional parameter
+        parameter_name: &'a str,
+        /// Help text
+        help: Option<&'a str>,
+    },
+    /// An optional named parameter with no argument (e.g. `--verbose` or `--dry-run`)
+    Named {
+        /// The bit that comes after the `--`
+        parameter_name: &'a str,
+        /// Help text
+        help: Option<&'a str>,
+    },
+    /// A optional named parameter with argument (e.g. `--mode=foo` or `--level=3`)
     NamedValue {
         /// The bit that comes after the `--`
         parameter_name: &'a str,
         /// The bit that comes after the `--name=`, e.g. `INT` or `FILE`. It's mostly for help text.
         argument_name: &'a str,
+        /// Help text
+        help: Option<&'a str>,
     },
 }
 
@@ -119,20 +136,20 @@ pub fn argument_finder<'a, T>(
         let mut optional_count = 0;
         for param in parameters.iter() {
             match param {
-                Parameter::Mandatory(name) => {
+                Parameter::Mandatory { parameter_name, .. } => {
                     mandatory_count += 1;
-                    if *name == name_to_find {
+                    if *parameter_name == name_to_find {
                         found_param = Some((param, mandatory_count));
                     }
                 }
-                Parameter::Optional(name) => {
+                Parameter::Optional { parameter_name, .. } => {
                     optional_count += 1;
-                    if *name == name_to_find {
+                    if *parameter_name == name_to_find {
                         found_param = Some((param, optional_count));
                     }
                 }
-                Parameter::Named(name) => {
-                    if *name == name_to_find {
+                Parameter::Named { parameter_name, .. } => {
+                    if *parameter_name == name_to_find {
                         found_param = Some((param, 0));
                     }
                 }
@@ -146,41 +163,37 @@ pub fn argument_finder<'a, T>(
         // Step 2 - What sort of parameter is it?
         match found_param {
             // Step 2a - Mandatory Positional
-            Some((Parameter::Mandatory(_name), mandatory_idx)) => {
-                // We want positional parameter number `mandatory_idx` of `mandatory_count`.
+            Some((Parameter::Mandatory { .. }, mandatory_idx)) => {
+                // We want positional parameter number `mandatory_idx`.
                 let mut positional_args_seen = 0;
-                for arg in argument_list {
-                    if !arg.starts_with("--") {
-                        // Positional
-                        positional_args_seen += 1;
-                        if positional_args_seen == mandatory_idx {
-                            return Ok(Some(arg));
-                        }
+                for arg in argument_list.iter().filter(|x| !x.starts_with("--")) {
+                    // Positional
+                    positional_args_seen += 1;
+                    if positional_args_seen == mandatory_idx {
+                        return Ok(Some(arg));
                     }
                 }
                 // Valid thing to ask for but we don't have it
                 Ok(None)
             }
             // Step 2b - Optional Positional
-            Some((Parameter::Optional(_name), optional_idx)) => {
-                // We want positional parameter number `mandatory_idx` of `mandatory_count`.
+            Some((Parameter::Optional { .. }, optional_idx)) => {
+                // We want positional parameter number `mandatory_count + optional_idx`.
                 let mut positional_args_seen = 0;
-                for arg in argument_list {
-                    if !arg.starts_with("--") {
-                        // Positional
-                        positional_args_seen += 1;
-                        if positional_args_seen == (mandatory_count + optional_idx) {
-                            return Ok(Some(arg));
-                        }
+                for arg in argument_list.iter().filter(|x| !x.starts_with("--")) {
+                    // Positional
+                    positional_args_seen += 1;
+                    if positional_args_seen == (mandatory_count + optional_idx) {
+                        return Ok(Some(arg));
                     }
                 }
                 // Valid thing to ask for but we don't have it
                 Ok(None)
             }
             // Step 2c - Named (e.g. `--verbose`)
-            Some((Parameter::Named(name), _)) => {
+            Some((Parameter::Named { parameter_name, .. }, _)) => {
                 for arg in argument_list {
-                    if arg.starts_with("--") && (&arg[2..] == *name) {
+                    if arg.starts_with("--") && (&arg[2..] == *parameter_name) {
                         return Ok(Some(""));
                     }
                 }
@@ -269,8 +282,9 @@ where
             return;
         }
         let outcome = if input == 0x0D {
-            writeln!(self.context).unwrap();
-            self.process_command()
+            // Handle the command
+            self.process_command();
+            Outcome::CommandProcessed
         } else if (input == 0x08) || (input == 0x7F) {
             // Handling backspace or delete
             if self.used > 0 {
@@ -311,42 +325,48 @@ where
     }
 
     /// Scan the buffer and do the right thing based on its contents.
-    fn process_command(&mut self) -> Outcome {
+    fn process_command(&mut self) {
+        // Go to the next line, below the prompt
+        writeln!(self.context).unwrap();
         if let Ok(command_line) = core::str::from_utf8(&self.buffer[0..self.used]) {
             // We have a valid string
-            if command_line == "help" {
+            let mut parts = command_line.split_whitespace();
+            if let Some(cmd) = parts.next() {
                 let menu = self.menus[self.depth].unwrap();
-                for item in menu.items {
-                    self.print_help(&item);
-                }
-                if self.depth != 0 {
-                    let item = Item {
-                        command: "exit",
-                        help: Some("leave this menu"),
-                        item_type: ItemType::_Dummy,
-                    };
-                    self.print_help(&item);
-                }
-                let item = Item {
-                    command: "help",
-                    help: Some("show this help"),
-                    item_type: ItemType::_Dummy,
-                };
-                self.print_help(&item);
-                Outcome::CommandProcessed
-            } else if command_line == "exit" && self.depth != 0 {
-                if self.depth == self.menus.len() {
-                    writeln!(self.context, "Can't enter menu - structure too deep.").unwrap();
-                } else {
+                if cmd == "help" {
+                    match parts.next() {
+                        Some(arg) => match menu.items.iter().find(|i| i.command == arg) {
+                            Some(item) => {
+                                self.print_long_help(&item);
+                            }
+                            None => {
+                                writeln!(self.context, "I can't help with {:?}", arg).unwrap();
+                            }
+                        },
+                        _ => {
+                            writeln!(self.context, "AVAILABLE ITEMS:").unwrap();
+                            for item in menu.items {
+                                self.print_short_help(&item);
+                            }
+                            if self.depth != 0 {
+                                self.print_short_help(&Item {
+                                    command: "exit",
+                                    help: Some("Leave this menu."),
+                                    item_type: ItemType::_Dummy,
+                                });
+                            }
+                            self.print_short_help(&Item {
+                                command: "help [ <command> ]",
+                                help: Some("Show this help, or get help on a specific command."),
+                                item_type: ItemType::_Dummy,
+                            });
+                        }
+                    }
+                } else if cmd == "exit" && self.depth != 0 {
                     self.menus[self.depth] = None;
                     self.depth -= 1;
-                }
-                Outcome::CommandProcessed
-            } else {
-                let mut parts = command_line.split(' ');
-                if let Some(cmd) = parts.next() {
+                } else {
                     let mut found = false;
-                    let menu = self.menus[self.depth].unwrap();
                     for item in menu.items {
                         if cmd == item.command {
                             match item.item_type {
@@ -376,59 +396,151 @@ where
                     if !found {
                         writeln!(self.context, "Command {:?} not found. Try 'help'.", cmd).unwrap();
                     }
-                    Outcome::CommandProcessed
-                } else {
-                    writeln!(self.context, "Input empty").unwrap();
-                    Outcome::CommandProcessed
                 }
+            } else {
+                writeln!(self.context, "Input was empty?").unwrap();
             }
         } else {
             // Hmm ..  we did not have a valid string
             writeln!(self.context, "Input was not valid UTF-8").unwrap();
-            Outcome::CommandProcessed
         }
     }
 
-    fn print_help(&mut self, item: &Item<T>) {
+    fn print_short_help(&mut self, item: &Item<T>) {
         match item.item_type {
             ItemType::Callback { parameters, .. } => {
+                write!(self.context, "\t{}", item.command).unwrap();
                 if !parameters.is_empty() {
-                    write!(self.context, "{}", item.command).unwrap();
                     for param in parameters.iter() {
                         match param {
-                            Parameter::Mandatory(name) => {
-                                write!(self.context, " <{}>", name).unwrap();
+                            Parameter::Mandatory { parameter_name, .. } => {
+                                write!(self.context, " <{}>", parameter_name).unwrap();
                             }
-                            Parameter::Optional(name) => {
-                                write!(self.context, " [ <{}> ]", name).unwrap();
+                            Parameter::Optional { parameter_name, .. } => {
+                                write!(self.context, " [ <{}> ]", parameter_name).unwrap();
                             }
-                            Parameter::Named(name) => {
-                                write!(self.context, " [ --{} ]", name).unwrap();
+                            Parameter::Named { parameter_name, .. } => {
+                                write!(self.context, " [ --{} ]", parameter_name).unwrap();
                             }
                             Parameter::NamedValue {
                                 parameter_name,
                                 argument_name,
+                                ..
                             } => {
                                 write!(self.context, " [ --{}={} ]", parameter_name, argument_name)
                                     .unwrap();
                             }
                         }
                     }
-                } else {
-                    write!(self.context, "{}", item.command).unwrap();
                 }
             }
             ItemType::Menu(_menu) => {
-                write!(self.context, "{}", item.command).unwrap();
+                write!(self.context, "\t{}", item.command).unwrap();
             }
             ItemType::_Dummy => {
-                write!(self.context, "{}", item.command).unwrap();
+                write!(self.context, "\t{}", item.command).unwrap();
             }
         }
         if let Some(help) = item.help {
-            write!(self.context, " - {}", help).unwrap();
+            let mut help_line_iter = help.split('\n');
+            writeln!(self.context, " - {}", help_line_iter.next().unwrap()).unwrap();
         }
-        writeln!(self.context).unwrap();
+    }
+
+    fn print_long_help(&mut self, item: &Item<T>) {
+        writeln!(self.context, "SUMMARY:").unwrap();
+        match item.item_type {
+            ItemType::Callback { parameters, .. } => {
+                write!(self.context, "\t{}", item.command).unwrap();
+                if !parameters.is_empty() {
+                    for param in parameters.iter() {
+                        match param {
+                            Parameter::Mandatory { parameter_name, .. } => {
+                                write!(self.context, " <{}>", parameter_name).unwrap();
+                            }
+                            Parameter::Optional { parameter_name, .. } => {
+                                write!(self.context, " [ <{}> ]", parameter_name).unwrap();
+                            }
+                            Parameter::Named { parameter_name, .. } => {
+                                write!(self.context, " [ --{} ]", parameter_name).unwrap();
+                            }
+                            Parameter::NamedValue {
+                                parameter_name,
+                                argument_name,
+                                ..
+                            } => {
+                                write!(self.context, " [ --{}={} ]", parameter_name, argument_name)
+                                    .unwrap();
+                            }
+                        }
+                    }
+                    writeln!(self.context, "\n\nPARAMETERS:").unwrap();
+                    for param in parameters.iter() {
+                        match param {
+                            Parameter::Mandatory {
+                                parameter_name,
+                                help,
+                            } => {
+                                writeln!(
+                                    self.context,
+                                    "\t<{0}>\n\t\t- {1}",
+                                    parameter_name,
+                                    help.unwrap_or(""),
+                                )
+                                .unwrap();
+                            }
+                            Parameter::Optional {
+                                parameter_name,
+                                help,
+                            } => {
+                                writeln!(
+                                    self.context,
+                                    "\t<{0}>\n\t\t- {1}",
+                                    parameter_name,
+                                    help.unwrap_or("No help text found"),
+                                )
+                                .unwrap();
+                            }
+                            Parameter::Named {
+                                parameter_name,
+                                help,
+                            } => {
+                                writeln!(
+                                    self.context,
+                                    "\t--{0}\n\t\t- {1}",
+                                    parameter_name,
+                                    help.unwrap_or("No help text found"),
+                                )
+                                .unwrap();
+                            }
+                            Parameter::NamedValue {
+                                parameter_name,
+                                argument_name,
+                                help,
+                            } => {
+                                writeln!(
+                                    self.context,
+                                    "\t--{0}={1}\n\t\t- {2}",
+                                    parameter_name,
+                                    argument_name,
+                                    help.unwrap_or("No help text found"),
+                                )
+                                .unwrap();
+                            }
+                        }
+                    }
+                }
+            }
+            ItemType::Menu(_menu) => {
+                write!(self.context, "\t{}", item.command).unwrap();
+            }
+            ItemType::_Dummy => {
+                write!(self.context, "\t{}", item.command).unwrap();
+            }
+        }
+        if let Some(help) = item.help {
+            writeln!(self.context, "\n\nDESCRIPTION:\n{}", help).unwrap();
+        }
     }
 
     fn call_function(
@@ -442,15 +554,15 @@ where
         let mandatory_parameter_count = parameters
             .iter()
             .filter(|p| match p {
-                Parameter::Mandatory(_) => true,
+                Parameter::Mandatory { .. } => true,
                 _ => false,
             })
             .count();
         let positional_parameter_count = parameters
             .iter()
             .filter(|p| match p {
-                Parameter::Mandatory(_) => true,
-                Parameter::Optional(_) => true,
+                Parameter::Mandatory { .. } => true,
+                Parameter::Optional { .. } => true,
                 _ => false,
             })
             .count();
@@ -470,16 +582,16 @@ where
                     let mut found = false;
                     for param in parameters.iter() {
                         match param {
-                            Parameter::Named(name) => {
-                                if &arg[2..] == *name {
+                            Parameter::Named { parameter_name, .. } => {
+                                if &arg[2..] == *parameter_name {
                                     found = true;
                                     break;
                                 }
                             }
                             Parameter::NamedValue { parameter_name, .. } => {
                                 if arg.contains('=') {
-                                    if let Some(name) = arg[2..].split('=').next() {
-                                        if name == *parameter_name {
+                                    if let Some(given_name) = arg[2..].split('=').next() {
+                                        if given_name == *parameter_name {
                                             found = true;
                                             break;
                                         }
@@ -536,9 +648,18 @@ mod tests {
             item_type: ItemType::Callback {
                 function: dummy,
                 parameters: &[
-                    Parameter::Mandatory("foo"),
-                    Parameter::Mandatory("bar"),
-                    Parameter::Mandatory("baz"),
+                    Parameter::Mandatory {
+                        parameter_name: "foo",
+                        help: Some("Some help for foo"),
+                    },
+                    Parameter::Mandatory {
+                        parameter_name: "bar",
+                        help: Some("Some help for bar"),
+                    },
+                    Parameter::Mandatory {
+                        parameter_name: "baz",
+                        help: Some("Some help for baz"),
+                    },
                 ],
             },
         };
@@ -566,9 +687,18 @@ mod tests {
             item_type: ItemType::Callback {
                 function: dummy,
                 parameters: &[
-                    Parameter::Mandatory("foo"),
-                    Parameter::Mandatory("bar"),
-                    Parameter::Optional("baz"),
+                    Parameter::Mandatory {
+                        parameter_name: "foo",
+                        help: Some("Some help for foo"),
+                    },
+                    Parameter::Mandatory {
+                        parameter_name: "bar",
+                        help: Some("Some help for bar"),
+                    },
+                    Parameter::Optional {
+                        parameter_name: "baz",
+                        help: Some("Some help for baz"),
+                    },
                 ],
             },
         };
@@ -598,9 +728,18 @@ mod tests {
             item_type: ItemType::Callback {
                 function: dummy,
                 parameters: &[
-                    Parameter::Mandatory("foo"),
-                    Parameter::Named("bar"),
-                    Parameter::Named("baz"),
+                    Parameter::Mandatory {
+                        parameter_name: "foo",
+                        help: Some("Some help for foo"),
+                    },
+                    Parameter::Named {
+                        parameter_name: "bar",
+                        help: Some("Some help for bar"),
+                    },
+                    Parameter::Named {
+                        parameter_name: "baz",
+                        help: Some("Some help for baz"),
+                    },
                 ],
             },
         };
@@ -633,11 +772,18 @@ mod tests {
             item_type: ItemType::Callback {
                 function: dummy,
                 parameters: &[
-                    Parameter::Mandatory("foo"),
-                    Parameter::Named("bar"),
+                    Parameter::Mandatory {
+                        parameter_name: "foo",
+                        help: Some("Some help for foo"),
+                    },
+                    Parameter::Named {
+                        parameter_name: "bar",
+                        help: Some("Some help for bar"),
+                    },
                     Parameter::NamedValue {
                         parameter_name: "baz",
-                        argument_name: "BAZ",
+                        argument_name: "TEST",
+                        help: Some("Some help for baz"),
                     },
                 ],
             },

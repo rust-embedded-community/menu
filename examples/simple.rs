@@ -11,17 +11,34 @@ const ROOT_MENU: Menu<Output> = Menu {
             item_type: ItemType::Callback {
                 function: select_foo,
                 parameters: &[
-                    Parameter::Mandatory("a"),
-                    Parameter::Optional("b"),
-                    Parameter::Named("verbose"),
+                    Parameter::Mandatory {
+                        parameter_name: "a",
+                        help: Some("This is the help text for 'a'"),
+                    },
+                    Parameter::Optional {
+                        parameter_name: "b",
+                        help: None,
+                    },
+                    Parameter::Named {
+                        parameter_name: "verbose",
+                        help: None,
+                    },
                     Parameter::NamedValue {
                         parameter_name: "level",
                         argument_name: "INT",
+                        help: Some("Set the level of the dangle"),
                     },
                 ],
             },
             command: "foo",
-            help: Some("makes a foo appear"),
+            help: Some(
+                "Makes a foo appear.
+
+This is some extensive help text.
+
+It contains multiple paragraphs and should be preceeded by the parameter list.
+",
+            ),
         },
         &Item {
             item_type: ItemType::Callback {
