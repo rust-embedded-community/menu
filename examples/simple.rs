@@ -11,10 +11,10 @@ const FOO_ITEM: Item<Output> = Item {
             Parameter::Mandatory("a"),
             Parameter::Optional("b"),
             Parameter::Named("verbose"),
-            // Parameter::NamedValue {
-            //     parameter_name: "level",
-            //     argument_name: "INT",
-            // },
+            Parameter::NamedValue {
+                parameter_name: "level",
+                argument_name: "INT",
+            },
         ],
     },
     command: "foo",
@@ -113,7 +113,7 @@ fn exit_root(_menu: &Menu<Output>, context: &mut Output) {
     writeln!(context, "In exit_root").unwrap();
 }
 
-fn select_foo<'a>(menu: &Menu<Output>, item: &Item<Output>, args: &[&str], context: &mut Output) {
+fn select_foo<'a>(_menu: &Menu<Output>, item: &Item<Output>, args: &[&str], context: &mut Output) {
     writeln!(context, "In select_foo. Args = {:?}", args).unwrap();
     writeln!(
         context,

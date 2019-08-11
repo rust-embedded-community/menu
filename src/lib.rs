@@ -106,8 +106,10 @@ pub fn argument_finder<'a, T>(
                         found_param = Some((param, 0));
                     }
                 }
-                _ => {
-                    unimplemented!();
+                Parameter::NamedValue { parameter_name, .. } => {
+                    if *parameter_name == name_to_find {
+                        found_param = Some((param, 0));
+                    }
                 }
             }
         }
@@ -145,7 +147,7 @@ pub fn argument_finder<'a, T>(
                 // Valid thing to ask for but we don't have it
                 Ok(None)
             }
-            // Step 2c - Named
+            // Step 2c - Named (e.g. `--verbose`)
             Some((Parameter::Named(name), _)) => {
                 for arg in argument_list {
                     if arg.starts_with("--") && (&arg[2..] == *name) {
@@ -155,7 +157,23 @@ pub fn argument_finder<'a, T>(
                 // Valid thing to ask for but we don't have it
                 Ok(None)
             }
-            // Step 2d - NamedValue
+            // Step 2d - NamedValue (e.g. `--level=123`)
+            Some((Parameter::NamedValue { parameter_name, .. }, _)) => {
+                let name_start = 2;
+                let equals_start = name_start + parameter_name.len();
+                let value_start = equals_start + 1;
+                for arg in argument_list {
+                    if arg.starts_with("--")
+                        && (arg.len() >= value_start)
+                        && (arg.get(equals_start..=equals_start) == Some("="))
+                        && (arg.get(name_start..equals_start) == Some(*parameter_name))
+                    {
+                        return Ok(Some(&arg[value_start..]));
+                    }
+                }
+                // Valid thing to ask for but we don't have it
+                Ok(None)
+            }
             // Step 2e - not found
             _ => Err(()),
         }
@@ -553,6 +571,64 @@ mod tests {
         assert_eq!(
             argument_finder(&item, &["a", "--bar", "--baz"], "baz"),
             Ok(Some(""))
+        );
+        // Not an argument
+        assert_eq!(
+            argument_finder(&item, &["a", "--bar", "--baz"], "quux"),
+            Err(())
+        );
+        // Missing named
+        assert_eq!(argument_finder(&item, &["a"], "baz"), Ok(None));
+    }
+
+    #[test]
+    fn find_arg_namedvalue() {
+        let item = Item {
+            command: "dummy",
+            help: None,
+            item_type: ItemType::Callback {
+                function: dummy,
+                parameters: &[
+                    Parameter::Mandatory("foo"),
+                    Parameter::Named("bar"),
+                    Parameter::NamedValue {
+                        parameter_name: "baz",
+                        argument_name: "BAZ",
+                    },
+                ],
+            },
+        };
+        assert_eq!(
+            argument_finder(&item, &["a", "--bar", "--baz"], "foo"),
+            Ok(Some("a"))
+        );
+        assert_eq!(
+            argument_finder(&item, &["a", "--bar", "--baz"], "bar"),
+            Ok(Some(""))
+        );
+        // No argument so mark as not found
+        assert_eq!(
+            argument_finder(&item, &["a", "--bar", "--baz"], "baz"),
+            Ok(None)
+        );
+        // Empty argument
+        assert_eq!(
+            argument_finder(&item, &["a", "--bar", "--baz="], "baz"),
+            Ok(Some(""))
+        );
+        // Short argument
+        assert_eq!(
+            argument_finder(&item, &["a", "--bar", "--baz=1"], "baz"),
+            Ok(Some("1"))
+        );
+        // Long argument
+        assert_eq!(
+            argument_finder(
+                &item,
+                &["a", "--bar", "--baz=abcdefghijklmnopqrstuvwxyz"],
+                "baz"
+            ),
+            Ok(Some("abcdefghijklmnopqrstuvwxyz"))
         );
         // Not an argument
         assert_eq!(
