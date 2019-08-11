@@ -4,68 +4,63 @@ use menu::*;
 use pancurses::{endwin, initscr, noecho, Input};
 use std::fmt::Write;
 
-const FOO_ITEM: Item<Output> = Item {
-    item_type: ItemType::Callback {
-        function: select_foo,
-        parameters: &[
-            Parameter::Mandatory("a"),
-            Parameter::Optional("b"),
-            Parameter::Named("verbose"),
-            Parameter::NamedValue {
-                parameter_name: "level",
-                argument_name: "INT",
-            },
-        ],
-    },
-    command: "foo",
-    help: Some("makes a foo appear"),
-};
-
-const BAR_ITEM: Item<Output> = Item {
-    item_type: ItemType::Callback {
-        function: select_bar,
-        parameters: &[],
-    },
-    command: "bar",
-    help: Some("fandoggles a bar"),
-};
-
-const ENTER_ITEM: Item<Output> = Item {
-    item_type: ItemType::Menu(&SUB_MENU),
-    command: "sub",
-    help: Some("enter sub-menu"),
-};
-
 const ROOT_MENU: Menu<Output> = Menu {
     label: "root",
-    items: &[&FOO_ITEM, &BAR_ITEM, &ENTER_ITEM],
+    items: &[
+        &Item {
+            item_type: ItemType::Callback {
+                function: select_foo,
+                parameters: &[
+                    Parameter::Mandatory("a"),
+                    Parameter::Optional("b"),
+                    Parameter::Named("verbose"),
+                    Parameter::NamedValue {
+                        parameter_name: "level",
+                        argument_name: "INT",
+                    },
+                ],
+            },
+            command: "foo",
+            help: Some("makes a foo appear"),
+        },
+        &Item {
+            item_type: ItemType::Callback {
+                function: select_bar,
+                parameters: &[],
+            },
+            command: "bar",
+            help: Some("fandoggles a bar"),
+        },
+        &Item {
+            item_type: ItemType::Menu(&Menu {
+                label: "sub",
+                items: &[
+                    &Item {
+                        item_type: ItemType::Callback {
+                            function: select_baz,
+                            parameters: &[],
+                        },
+                        command: "baz",
+                        help: Some("thingamobob a baz"),
+                    },
+                    &Item {
+                        item_type: ItemType::Callback {
+                            function: select_quux,
+                            parameters: &[],
+                        },
+                        command: "quux",
+                        help: Some("maximum quux"),
+                    },
+                ],
+                entry: Some(enter_sub),
+                exit: Some(exit_sub),
+            }),
+            command: "sub",
+            help: Some("enter sub-menu"),
+        },
+    ],
     entry: Some(enter_root),
     exit: Some(exit_root),
-};
-
-const BAZ_ITEM: Item<Output> = Item {
-    item_type: ItemType::Callback {
-        function: select_baz,
-        parameters: &[],
-    },
-    command: "baz",
-    help: Some("thingamobob a baz"),
-};
-
-const QUUX_ITEM: Item<Output> = Item {
-    item_type: ItemType::Callback {
-        function: select_quux,
-        parameters: &[],
-    },
-    command: "quux",
-    help: Some("maximum quux"),
-};
-
-const SUB_MENU: Menu<Output> = Menu {
-    label: "sub",
-    items: &[&BAZ_ITEM, &QUUX_ITEM],
-    entry: Some(enter_sub),
-    exit: Some(exit_sub),
 };
 
 struct Output(pancurses::Window);
