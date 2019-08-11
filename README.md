@@ -170,6 +170,10 @@ It contains multiple paragraphs and should be preceeded by the parameter list.
 
 ### Unreleased changes
 
+* None
+
+### v0.2.0
+
 * Parameter / Argument support
 * Re-worked help text system
 * Example uses `pancurses`
