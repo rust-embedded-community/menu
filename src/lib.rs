@@ -407,6 +407,7 @@ where
     }
 
     fn print_short_help(&mut self, item: &Item<T>) {
+        let mut has_options = false;
         match item.item_type {
             ItemType::Callback { parameters, .. } => {
                 write!(self.context, "  {}", item.command).unwrap();
@@ -419,16 +420,11 @@ where
                             Parameter::Optional { parameter_name, .. } => {
                                 write!(self.context, " [ <{}> ]", parameter_name).unwrap();
                             }
-                            Parameter::Named { parameter_name, .. } => {
-                                write!(self.context, " [ --{} ]", parameter_name).unwrap();
+                            Parameter::Named { .. } => {
+                                has_options = true;
                             }
-                            Parameter::NamedValue {
-                                parameter_name,
-                                argument_name,
-                                ..
-                            } => {
-                                write!(self.context, " [ --{}={} ]", parameter_name, argument_name)
-                                    .unwrap();
+                            Parameter::NamedValue { .. } => {
+                                has_options = true;
                             }
                         }
                     }
@@ -441,10 +437,10 @@ where
                 write!(self.context, "  {}", item.command).unwrap();
             }
         }
-        if let Some(help) = item.help {
-            let mut help_line_iter = help.split('\n');
-            writeln!(self.context, " - {}", help_line_iter.next().unwrap()).unwrap();
+        if has_options {
+            write!(self.context, " [OPTIONS...]").unwrap();
         }
+        writeln!(self.context).unwrap();
     }
 
     fn print_long_help(&mut self, item: &Item<T>) {
@@ -475,6 +471,7 @@ where
                         }
                     }
                     writeln!(self.context, "\n\nPARAMETERS:").unwrap();
+                    let default_help = "Undocumented option";
                     for param in parameters.iter() {
                         match param {
                             Parameter::Mandatory {
@@ -483,9 +480,9 @@ where
                             } => {
                                 writeln!(
                                     self.context,
-                                    "  <{0}>\n    - {1}",
+                                    "  <{0}>\n    {1}\n",
                                     parameter_name,
-                                    help.unwrap_or(""),
+                                    help.unwrap_or(default_help),
                                 )
                                 .unwrap();
                             }
@@ -495,9 +492,9 @@ where
                             } => {
                                 writeln!(
                                     self.context,
-                                    "  <{0}>\n    - {1}",
+                                    "  <{0}>\n    {1}\n",
                                     parameter_name,
-                                    help.unwrap_or("No help text found"),
+                                    help.unwrap_or(default_help),
                                 )
                                 .unwrap();
                             }
@@ -507,9 +504,9 @@ where
                             } => {
                                 writeln!(
                                     self.context,
-                                    "  --{0}\n    - {1}",
+                                    "  --{0}\n    {1}\n",
                                     parameter_name,
-                                    help.unwrap_or("No help text found"),
+                                    help.unwrap_or(default_help),
                                 )
                                 .unwrap();
                             }
@@ -520,10 +517,10 @@ where
                             } => {
                                 writeln!(
                                     self.context,
-                                    "  --{0}={1}\n    - {2}",
+                                    "  --{0}={1}\n    {2}\n",
                                     parameter_name,
                                     argument_name,
-                                    help.unwrap_or("No help text found"),
+                                    help.unwrap_or(default_help),
                                 )
                                 .unwrap();
                             }
