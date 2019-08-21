@@ -16,25 +16,25 @@ user@host: ~/menu $ cargo run --example simple
 In enter_root()
 > help
 AVAILABLE ITEMS:
-        foo <a> [ <b> ] [ --verbose ] [ --level=INT ] - Makes a foo appear.
-        bar - fandoggles a bar
-        sub - enter sub-menu
-        help [ <command> ] - Show this help, or get help on a specific command.
+  foo <a> [ <b> ] [ OPTIONS... ]
+  bar
+  sub
+  help [ <command> ]
 
 
 > help foo
 SUMMARY:
-        foo <a> [ <b> ] [ --verbose ] [ --level=INT ]
+  foo <a> [ <b> ] [ --verbose ] [ --level=INT ]
 
 PARAMETERS:
-        <a>
-                - This is the help text for 'a'
-        <b>
-                - No help text found
-        --verbose
-                - No help text found
-        --level=INT
-                - Set the level of the dangle
+  <a>
+       This is the help text for 'a'
+  <b>
+       No help text found
+  --verbose
+       No help text found
+  --level=INT
+       Set the level of the dangle
 
 
 DESCRIPTION:
@@ -63,20 +63,19 @@ Error: Too many arguments given
 
 /sub> help
 AVAILABLE ITEMS:
-        baz - thingamobob a baz
-        quux - maximum quux
-        exit - Leave this menu.
-        help [ <command> ] - Show this help, or get help on a specific command.
-
+  baz
+  quux
+  exit
+  help [ <command> ]
 
 > exit
 
 > help
 AVAILABLE ITEMS:
-        foo <a> [ <b> ] [ --verbose ] [ --level=INT ] - Makes a foo appear.
-        bar - fandoggles a bar
-        sub - enter sub-menu
-        help [ <command> ] - Show this help, or get help on a specific command.
+  foo <a> [ <b> ] [ OPTIONS... ]
+  bar
+  sub
+  help [ <command> ]
 
 
 > ^C
@@ -171,6 +170,10 @@ It contains multiple paragraphs and should be preceeded by the parameter list.
 ### Unreleased changes
 
 * None
+
+### v0.3.2
+
+* Shortened help output.
 
 ### v0.3.1
 
