@@ -509,14 +509,14 @@ where
                 }
             }
             ItemType::Menu(_menu) => {
-                write!(self.context, "  {}", item.command).unwrap();
+                writeln!(self.context, "  {}\n", item.command).unwrap();
             }
             ItemType::_Dummy => {
-                write!(self.context, "  {}", item.command).unwrap();
+                writeln!(self.context, "  {}\n", item.command).unwrap();
             }
         }
         if let Some(help) = item.help {
-            writeln!(self.context, "\n\nDESCRIPTION:\n{}", help).unwrap();
+            writeln!(self.context, "DESCRIPTION:\n{}", help).unwrap();
         }
     }
 
