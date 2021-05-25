@@ -379,8 +379,6 @@ where
                         writeln!(self.context, "Command {:?} not found. Try 'help'.", cmd).unwrap();
                     }
                 }
-            } else {
-                writeln!(self.context, "Input was empty?").unwrap();
             }
         } else {
             // Hmm ..  we did not have a valid string
