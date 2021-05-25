@@ -295,21 +295,7 @@ where
         } else if self.used < self.buffer.len() {
             self.buffer[self.used] = input;
             self.used += 1;
-
-            // We have to do this song and dance because `self.prompt()` needs
-            // a mutable reference to self, and we can't have that while
-            // holding a reference to the buffer at the same time.
-            // This line grabs the buffer, checks it's OK, then releases it again
-            let valid = core::str::from_utf8(&self.buffer[0..self.used]).is_ok();
-            // Now we've released the buffer, we can draw the prompt
-            if valid {
-                write!(self.context, "\r").unwrap();
-                self.prompt(false);
-            }
-            // Grab the buffer again to render it to the screen
-            if let Ok(s) = core::str::from_utf8(&self.buffer[0..self.used]) {
-                write!(self.context, "{}", s).unwrap();
-            }
+            write!(self.context, "{}", input as char).unwrap();
             Outcome::NeedMore
         } else {
             writeln!(self.context, "Buffer overflow!").unwrap();
