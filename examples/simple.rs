@@ -97,9 +97,6 @@ fn main() {
     let mut r = Runner::new(&ROOT_MENU, &mut buffer, Output(window));
     loop {
         match r.context.0.getch() {
-            Some(Input::Character('\n')) => {
-                r.input_byte(b'\r');
-            }
             Some(Input::Character(c)) => {
                 let mut buf = [0; 4];
                 for b in c.encode_utf8(&mut buf).bytes() {

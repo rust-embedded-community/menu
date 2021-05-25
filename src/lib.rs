@@ -277,11 +277,7 @@ where
     /// carriage-return, the buffer is scanned and the appropriate action
     /// performed.
     pub fn input_byte(&mut self, input: u8) {
-        // Strip carriage returns
-        if input == 0x0A {
-            return;
-        }
-        let outcome = if input == 0x0D {
+        let outcome = if input == 0x0D || input == 0x0A {
             // Handle the command
             self.process_command();
             Outcome::CommandProcessed
