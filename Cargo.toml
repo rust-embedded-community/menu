@@ -12,7 +12,8 @@ readme = "README.md"
 
 
 [features]
-no-echo = []
+default = ["echo"]
+echo = []
 
 
 [dev-dependencies]

@@ -282,7 +282,7 @@ where
             return;
         }
         let outcome = if input == 0x0D {
-            #[cfg(feature = "no-echo")]
+            #[cfg(not(feature = "echo"))]
             {
                 // Echo the command
                 write!(self.context, "\r").unwrap();
@@ -304,7 +304,7 @@ where
             self.buffer[self.used] = input;
             self.used += 1;
 
-            #[cfg(not(feature = "no-echo"))]
+            #[cfg(feature = "echo")]
             {
                 // We have to do this song and dance because `self.prompt()` needs
                 // a mutable reference to self, and we can't have that while
