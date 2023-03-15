@@ -276,6 +276,7 @@ where
     /// Add a byte to the menu runner's buffer. If this byte is a
     /// carriage-return, the buffer is scanned and the appropriate action
     /// performed.
+    /// By default, an echo feature is enabled to display commands on the terminal.
     pub fn input_byte(&mut self, input: u8) {
         // Strip carriage returns
         if input == 0x0A {
