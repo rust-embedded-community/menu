@@ -11,5 +11,10 @@ readme = "README.md"
 [dependencies]
 
 
+[features]
+default = ["echo"]
+echo = []
+
+
 [dev-dependencies]
 pancurses = "0.16"

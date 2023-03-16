@@ -171,6 +171,10 @@ It contains multiple paragraphs and should be preceeded by the parameter list.
 
 * None
 
+### v0.3.3
+
+* Add the possibility to disable local echo (via echo feature, enabled by default)
+
 ### v0.3.2
 
 * Shortened help output.
