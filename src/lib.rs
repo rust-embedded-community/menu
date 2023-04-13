@@ -580,12 +580,41 @@ where
             let mut argument_buffer: [&str; 16] = [""; 16];
             let mut argument_count = 0;
             let mut positional_arguments = 0;
-            for (slot, arg) in argument_buffer
-                .iter_mut()
-                .zip(command[item.command.len()..].split_whitespace())
-            {
-                *slot = arg;
-                argument_count += 1;
+            // buffer of characters and lengths
+            let mut buf = [([0u8; 32], 0_usize); 16];
+            let mut quoted = false;
+            let mut next = 0;
+            let chars = command[item.command.len()..].chars();
+            for c in chars {
+                match c {
+                    '"' => {
+                        quoted = !quoted;
+                    }
+                    ' ' => {
+                        if quoted {
+                            buf[argument_count].0[next] = c as u8;
+                            next += 1;
+                        } else {
+                            argument_count += 1;
+                            buf[argument_count].1 = next;
+                            next = 0;
+                        }
+                    }
+                    _ => {
+                        buf[argument_count].0[next] = c as u8;
+                        next += 1;
+                    }
+                }
+                buf[argument_count].1 = next;
+            }
+            let mut index = 0;
+            for arr in buf.iter() {
+                if arr.1 != 0 {
+                    argument_buffer[index] = core::str::from_utf8(&arr.0[0..arr.1]).unwrap().trim();
+                    index += 1;
+                }
+            }
+            for arg in argument_buffer.iter() {
                 if arg.starts_with("--") {
                     // Validate named argument
                     let mut found = false;
@@ -616,7 +645,7 @@ where
                         writeln!(context, "Error: Did not understand {:?}", arg).unwrap();
                         return;
                     }
-                } else {
+                } else if !arg.is_empty() {
                     positional_arguments += 1;
                 }
             }
