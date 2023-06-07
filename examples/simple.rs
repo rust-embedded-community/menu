@@ -82,6 +82,16 @@ It contains multiple paragraphs and should be preceeded by the parameter list.
 
 struct Output(pancurses::Window);
 
+impl Output {
+    async fn wait_for_q(&self) {
+        loop {
+            if let Some(Input::Character('q')) = self.0.getch() {
+                break;
+            }
+        }
+    }
+}
+
 impl std::fmt::Write for Output {
     fn write_str(&mut self, s: &str) -> Result<(), std::fmt::Error> {
         self.0.printw(s);
@@ -92,6 +102,7 @@ impl std::fmt::Write for Output {
 #[tokio::main]
 async fn main() {
     let window = initscr();
+    window.timeout(100);
     window.scrollok(true);
     noecho();
     let mut buffer = [0u8; 64];
@@ -170,6 +181,10 @@ impl ItemHandler<Output> for FooItemHandler {
             ::menu::argument_finder(item, args, "no_such_arg")
         )
         .unwrap();
+
+        writeln!(context, "Press 'q' to exit this handler").unwrap();
+
+        context.wait_for_q().await;
     }
 }
 
