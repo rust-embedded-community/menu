@@ -4,12 +4,98 @@
 //! zero heap allocation.
 #![no_std]
 #![deny(missing_docs)]
+#![feature(async_fn_in_trait)]
+
+use core::{future::Future, pin::Pin};
+
+extern crate alloc;
+
+use alloc::boxed::Box;
 
 /// The type of function we call when we enter/exit a menu.
-pub type MenuCallbackFn<T> = fn(menu: &Menu<T>, context: &mut T);
+pub trait MenuHandler<T> {
+    /// A function to call when this menu is entered. If this is the root menu, this is called when the runner is created.
+    async fn entry(&self, menu: &Menu<'_, T>, context: &mut T);
 
-/// The type of function we call when we a valid command has been entered.
-pub type ItemCallbackFn<T> = fn(menu: &Menu<T>, item: &Item<T>, args: &[&str], context: &mut T);
+    /// A function to call when this menu is exited. Never called for the root menu.
+    async fn exit(&self, menu: &Menu<'_, T>, context: &mut T) {
+        let _ = menu;
+        let _ = context;
+    }
+}
+
+/// The type of function we call when we enter/exit a menu.
+pub trait BoxedMenuHandler<T> {
+    /// A function to call when this menu is entered. If this is the root menu, this is called when the runner is created.
+    fn entry<'a>(
+        &'a self,
+        menu: &'a Menu<T>,
+        context: &'a mut T,
+    ) -> Pin<Box<dyn Future<Output = ()> + 'a>>;
+
+    /// A function to call when this menu is exited. Never called for the root menu.
+    fn exit<'a>(
+        &'a self,
+        menu: &'a Menu<T>,
+        context: &'a mut T,
+    ) -> Pin<Box<dyn Future<Output = ()> + 'a>>;
+}
+
+/// The type of function we call when a valid command has been entered.
+pub trait ItemHandler<T> {
+    /// The function to call
+    async fn handle(&self, menu: &Menu<'_, T>, item: &Item<'_, T>, args: &[&str], context: &mut T);
+}
+
+/// The type of function we call when a valid command has been entered.
+pub trait BoxedItemHandler<T> {
+    /// The function to call
+    fn handle<'a>(
+        &'a self,
+        menu: &'a Menu<T>,
+        item: &'a Item<T>,
+        args: &'a [&str],
+        context: &'a mut T,
+    ) -> Pin<Box<dyn Future<Output = ()> + 'a>>;
+}
+
+/// Wrapper helper for transitioning an unboxed handler into a boxed one.
+pub struct BoxedHandler<T>(pub T);
+
+impl<T, H: MenuHandler<T>> BoxedMenuHandler<T> for BoxedHandler<H> {
+    // fn entry(&self, menu: &Menu<T>, context: &mut T) -> Pin<Box<dyn Future<Output = ()>>> {
+    //     Box::pin(self.0.entry(menu, context))
+    // }
+
+    fn entry<'a>(
+        &'a self,
+        menu: &'a Menu<T>,
+        context: &'a mut T,
+    ) -> Pin<Box<dyn Future<Output = ()> + 'a>> {
+        let fut = self.0.entry(menu, context);
+        Box::pin(fut)
+    }
+
+    fn exit<'a>(
+        &'a self,
+        menu: &'a Menu<T>,
+        context: &'a mut T,
+    ) -> Pin<Box<dyn Future<Output = ()> + 'a>> {
+        Box::pin(self.0.exit(menu, context))
+    }
+}
+
+impl<T, H: ItemHandler<T>> BoxedItemHandler<T> for BoxedHandler<H> {
+    fn handle<'a>(
+        &'a self,
+        menu: &'a Menu<T>,
+        item: &'a Item<T>,
+        args: &'a [&str],
+        context: &'a mut T,
+    ) -> Pin<Box<dyn Future<Output = ()> + 'a>> {
+        Box::pin(self.0.handle(menu, item, args, context))
+    }
+}
 
 #[derive(Debug)]
 /// Describes a parameter to the command
@@ -55,7 +141,7 @@ where
     /// Call a function when this command is entered
     Callback {
         /// The function to call
-        function: ItemCallbackFn<T>,
+        handler: &'a dyn BoxedItemHandler<T>,
         /// The list of parameters for this function. Pass an empty list if there aren't any.
         parameters: &'a [Parameter<'a>],
     },
@@ -91,10 +177,8 @@ where
     pub label: &'a str,
     /// A slice of menu items in this menu.
     pub items: &'a [&'a Item<'a, T>],
-    /// A function to call when this menu is entered. If this is the root menu, this is called when the runner is created.
-    pub entry: Option<MenuCallbackFn<T>>,
-    /// A function to call when this menu is exited. Never called for the root menu.
-    pub exit: Option<MenuCallbackFn<T>>,
+    /// The menu handler.
+    pub handler: Option<&'a dyn BoxedMenuHandler<T>>,
 }
 
 /// This structure handles the menu. You feed it bytes as they are read from
@@ -240,8 +324,8 @@ where
     /// `context` type - the only requirement is that the `Runner` can
     /// `write!` to the context, which it will do for all text output.
     pub fn new(menu: &'a Menu<'a, T>, buffer: &'a mut [u8], mut context: T) -> Runner<'a, T> {
-        if let Some(cb_fn) = menu.entry {
-            cb_fn(menu, &mut context);
+        if let Some(handler) = menu.handler {
+            handler.entry(menu, &mut context);
         }
         let mut r = Runner {
             menus: [Some(menu), None, None, None],
@@ -277,7 +361,7 @@ where
     /// carriage-return, the buffer is scanned and the appropriate action
     /// performed.
     /// By default, an echo feature is enabled to display commands on the terminal.
-    pub fn input_byte(&mut self, input: u8) {
+    pub async fn input_byte(&mut self, input: u8) {
         // Strip carriage returns
         if input == 0x0A {
             return;
@@ -292,7 +376,7 @@ where
                 }
             }
             // Handle the command
-            self.process_command();
+            self.process_command().await;
             Outcome::CommandProcessed
         } else if (input == 0x08) || (input == 0x7F) {
             // Handling backspace or delete
@@ -337,7 +421,7 @@ where
     }
 
     /// Scan the buffer and do the right thing based on its contents.
-    fn process_command(&mut self) {
+    async fn process_command(&mut self) {
         // Go to the next line, below the prompt
         writeln!(self.context).unwrap();
         if let Ok(command_line) = core::str::from_utf8(&self.buffer[0..self.used]) {
@@ -375,6 +459,10 @@ where
                         }
                     }
                 } else if cmd == "exit" && self.depth != 0 {
+                    if let Some(handler) = self.menus[self.depth].as_ref().unwrap().handler {
+                        handler.exit(menu, &mut self.context).await;
+                    }
+
                     self.menus[self.depth] = None;
                     self.depth -= 1;
                 } else {
@@ -383,19 +471,28 @@ where
                         if cmd == item.command {
                             match item.item_type {
                                 ItemType::Callback {
-                                    function,
+                                    handler,
                                     parameters,
-                                } => Self::call_function(
-                                    &mut self.context,
-                                    function,
-                                    parameters,
-                                    menu,
-                                    item,
-                                    command_line,
-                                ),
+                                } => {
+                                    Self::call_function(
+                                        &mut self.context,
+                                        handler,
+                                        parameters,
+                                        menu,
+                                        item,
+                                        command_line,
+                                    )
+                                    .await
+                                }
                                 ItemType::Menu(m) => {
                                     self.depth += 1;
                                     self.menus[self.depth] = Some(m);
+
+                                    if let Some(handler) =
+                                        self.menus[self.depth].as_ref().unwrap().handler
+                                    {
+                                        handler.entry(menu, &mut self.context).await;
+                                    }
                                 }
                                 ItemType::_Dummy => {
                                     unreachable!();
@@ -552,12 +649,12 @@ where
         }
     }
 
-    fn call_function(
+    async fn call_function<'h>(
         context: &mut T,
-        callback_function: ItemCallbackFn<T>,
-        parameters: &[Parameter],
-        parent_menu: &Menu<T>,
-        item: &Item<T>,
+        callback_handler: &'h dyn BoxedItemHandler<T>,
+        parameters: &[Parameter<'h>],
+        parent_menu: &Menu<'h, T>,
+        item: &Item<'h, T>,
         command: &str,
     ) {
         let mandatory_parameter_count = parameters
@@ -625,17 +722,21 @@ where
             } else if positional_arguments > positional_parameter_count {
                 writeln!(context, "Error: Too many arguments given").unwrap();
             } else {
-                callback_function(
-                    parent_menu,
-                    item,
-                    &argument_buffer[0..argument_count],
-                    context,
-                );
+                callback_handler
+                    .handle(
+                        parent_menu,
+                        item,
+                        &argument_buffer[0..argument_count],
+                        context,
+                    )
+                    .await;
             }
         } else {
             // Definitely no arguments
             if mandatory_parameter_count == 0 {
-                callback_function(parent_menu, item, &[], context);
+                callback_handler
+                    .handle(parent_menu, item, &[], context)
+                    .await;
             } else {
                 writeln!(context, "Error: Insufficient arguments given").unwrap();
             }
@@ -647,7 +748,18 @@ where
 mod tests {
     use super::*;
 
-    fn dummy(_menu: &Menu<u32>, _item: &Item<u32>, _args: &[&str], _context: &mut u32) {}
+    struct Dummy;
+
+    impl ItemHandler<u32> for Dummy {
+        async fn handle(
+            &self,
+            _menu: &Menu<'_, u32>,
+            _item: &Item<'_, u32>,
+            _args: &[&str],
+            _context: &mut u32,
+        ) {
+        }
+    }
 
     #[test]
     fn find_arg_mandatory() {
@@ -655,7 +767,7 @@ mod tests {
             command: "dummy",
             help: None,
             item_type: ItemType::Callback {
-                function: dummy,
+                handler: &BoxedHandler(Dummy),
                 parameters: &[
                     Parameter::Mandatory {
                         parameter_name: "foo",
@@ -694,7 +806,7 @@ mod tests {
             command: "dummy",
             help: None,
             item_type: ItemType::Callback {
-                function: dummy,
+                handler: &BoxedHandler(Dummy),
                 parameters: &[
                     Parameter::Mandatory {
                         parameter_name: "foo",
@@ -735,7 +847,7 @@ mod tests {
             command: "dummy",
             help: None,
             item_type: ItemType::Callback {
-                function: dummy,
+                handler: &BoxedHandler(Dummy),
                 parameters: &[
                     Parameter::Mandatory {
                         parameter_name: "foo",
@@ -779,7 +891,7 @@ mod tests {
             command: "dummy",
             help: None,
             item_type: ItemType::Callback {
-                function: dummy,
+                handler: &BoxedHandler(Dummy),
                 parameters: &[
                     Parameter::Mandatory {
                         parameter_name: "foo",

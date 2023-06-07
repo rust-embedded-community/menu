@@ -1,3 +1,5 @@
+#![feature(async_fn_in_trait)]
+
 extern crate menu;
 
 use menu::*;
@@ -9,7 +11,7 @@ const ROOT_MENU: Menu<Output> = Menu {
     items: &[
         &Item {
             item_type: ItemType::Callback {
-                function: select_foo,
+                handler: &BoxedHandler(FooItemHandler),
                 parameters: &[
                     Parameter::Mandatory {
                         parameter_name: "a",
@@ -42,7 +44,7 @@ It contains multiple paragraphs and should be preceeded by the parameter list.
         },
         &Item {
             item_type: ItemType::Callback {
-                function: select_bar,
+                handler: &BoxedHandler(BarHandler),
                 parameters: &[],
             },
             command: "bar",
@@ -54,7 +56,7 @@ It contains multiple paragraphs and should be preceeded by the parameter list.
                 items: &[
                     &Item {
                         item_type: ItemType::Callback {
-                            function: select_baz,
+                            handler: &BoxedHandler(BazHandler),
                             parameters: &[],
                         },
                         command: "baz",
@@ -62,22 +64,20 @@ It contains multiple paragraphs and should be preceeded by the parameter list.
                     },
                     &Item {
                         item_type: ItemType::Callback {
-                            function: select_quux,
+                            handler: &BoxedHandler(QuuxHandler),
                             parameters: &[],
                         },
                         command: "quux",
                         help: Some("maximum quux"),
                     },
                 ],
-                entry: Some(enter_sub),
-                exit: Some(exit_sub),
+                handler: Some(&BoxedHandler(SubMenuHandler)),
             }),
             command: "sub",
             help: Some("enter sub-menu"),
         },
     ],
-    entry: Some(enter_root),
-    exit: Some(exit_root),
+    handler: Some(&BoxedHandler(RootMenuHandler)),
 };
 
 struct Output(pancurses::Window);
@@ -89,7 +89,8 @@ impl std::fmt::Write for Output {
     }
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let window = initscr();
     window.scrollok(true);
     noecho();
@@ -98,12 +99,12 @@ fn main() {
     loop {
         match r.context.0.getch() {
             Some(Input::Character('\n')) => {
-                r.input_byte(b'\r');
+                r.input_byte(b'\r').await;
             }
             Some(Input::Character(c)) => {
                 let mut buf = [0; 4];
                 for b in c.encode_utf8(&mut buf).bytes() {
-                    r.input_byte(b);
+                    r.input_byte(b).await;
                 }
             }
             Some(Input::KeyDC) => break,
@@ -116,69 +117,112 @@ fn main() {
     endwin();
 }
 
-fn enter_root(_menu: &Menu<Output>, context: &mut Output) {
-    writeln!(context, "In enter_root").unwrap();
+struct RootMenuHandler;
+
+impl MenuHandler<Output> for RootMenuHandler {
+    async fn entry(&self, _menu: &Menu<'_, Output>, context: &mut Output) {
+        writeln!(context, "In enter_root").unwrap();
+    }
+
+    async fn exit(&self, _menu: &Menu<'_, Output>, context: &mut Output) {
+        writeln!(context, "In exit_root").unwrap();
+    }
 }
 
-fn exit_root(_menu: &Menu<Output>, context: &mut Output) {
-    writeln!(context, "In exit_root").unwrap();
+struct FooItemHandler;
+
+impl ItemHandler<Output> for FooItemHandler {
+    async fn handle(
+        &self,
+        _menu: &Menu<'_, Output>,
+        item: &Item<'_, Output>,
+        args: &[&str],
+        context: &mut Output,
+    ) {
+        writeln!(context, "In select_foo. Args = {:?}", args).unwrap();
+        writeln!(
+            context,
+            "a = {:?}",
+            ::menu::argument_finder(item, args, "a")
+        )
+        .unwrap();
+        writeln!(
+            context,
+            "b = {:?}",
+            ::menu::argument_finder(item, args, "b")
+        )
+        .unwrap();
+        writeln!(
+            context,
+            "verbose = {:?}",
+            ::menu::argument_finder(item, args, "verbose")
+        )
+        .unwrap();
+        writeln!(
+            context,
+            "level = {:?}",
+            ::menu::argument_finder(item, args, "level")
+        )
+        .unwrap();
+        writeln!(
+            context,
+            "no_such_arg = {:?}",
+            ::menu::argument_finder(item, args, "no_such_arg")
+        )
+        .unwrap();
+    }
 }
 
-fn select_foo<'a>(_menu: &Menu<Output>, item: &Item<Output>, args: &[&str], context: &mut Output) {
-    writeln!(context, "In select_foo. Args = {:?}", args).unwrap();
-    writeln!(
-        context,
-        "a = {:?}",
-        ::menu::argument_finder(item, args, "a")
-    )
-    .unwrap();
-    writeln!(
-        context,
-        "b = {:?}",
-        ::menu::argument_finder(item, args, "b")
-    )
-    .unwrap();
-    writeln!(
-        context,
-        "verbose = {:?}",
-        ::menu::argument_finder(item, args, "verbose")
-    )
-    .unwrap();
-    writeln!(
-        context,
-        "level = {:?}",
-        ::menu::argument_finder(item, args, "level")
-    )
-    .unwrap();
-    writeln!(
-        context,
-        "no_such_arg = {:?}",
-        ::menu::argument_finder(item, args, "no_such_arg")
-    )
-    .unwrap();
+struct BarHandler;
+
+impl ItemHandler<Output> for BarHandler {
+    async fn handle(
+        &self,
+        _menu: &Menu<'_, Output>,
+        _item: &Item<'_, Output>,
+        args: &[&str],
+        context: &mut Output,
+    ) {
+        writeln!(context, "In select_bar. Args = {:?}", args).unwrap();
+    }
 }
 
-fn select_bar<'a>(_menu: &Menu<Output>, _item: &Item<Output>, args: &[&str], context: &mut Output) {
-    writeln!(context, "In select_bar. Args = {:?}", args).unwrap();
+struct SubMenuHandler;
+
+impl MenuHandler<Output> for SubMenuHandler {
+    async fn entry(&self, _menu: &Menu<'_, Output>, context: &mut Output) {
+        writeln!(context, "In enter_sub").unwrap();
+    }
+
+    async fn exit(&self, _menu: &Menu<'_, Output>, context: &mut Output) {
+        writeln!(context, "In exit_sub").unwrap();
+    }
 }
 
-fn enter_sub(_menu: &Menu<Output>, context: &mut Output) {
-    writeln!(context, "In enter_sub").unwrap();
+struct BazHandler;
+
+impl ItemHandler<Output> for BazHandler {
+    async fn handle(
+        &self,
+        _menu: &Menu<'_, Output>,
+        _item: &Item<'_, Output>,
+        args: &[&str],
+        context: &mut Output,
+    ) {
+        writeln!(context, "In select_baz: Args = {:?}", args).unwrap();
+    }
 }
 
-fn exit_sub(_menu: &Menu<Output>, context: &mut Output) {
-    writeln!(context, "In exit_sub").unwrap();
-}
+struct QuuxHandler;
 
-fn select_baz<'a>(_menu: &Menu<Output>, _item: &Item<Output>, args: &[&str], context: &mut Output) {
-    writeln!(context, "In select_baz: Args = {:?}", args).unwrap();
-}
-
-fn select_quux<'a>(
-    _menu: &Menu<Output>,
-    _item: &Item<Output>,
-    args: &[&str],
-    context: &mut Output,
-) {
-    writeln!(context, "In select_quux: Args = {:?}", args).unwrap();
+impl ItemHandler<Output> for QuuxHandler {
+    async fn handle(
+        &self,
+        _menu: &Menu<'_, Output>,
+        _item: &Item<'_, Output>,
+        args: &[&str],
+        context: &mut Output,
+    ) {
+        writeln!(context, "In select_quux: Args = {:?}", args).unwrap();
+    }
 }
