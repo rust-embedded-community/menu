@@ -124,6 +124,7 @@ where
 ///   (and hence doesn't take a value).
 /// * Returns `Err(())` if `parameter_name` was not in `item.parameter_list`
 ///   or `item` wasn't an Item::Callback
+#[allow(clippy::result_unit_err)]
 pub fn argument_finder<'a, T>(
     item: &'a Item<'a, T>,
     argument_list: &'a [&'a str],
@@ -349,7 +350,7 @@ where
                     match parts.next() {
                         Some(arg) => match menu.items.iter().find(|i| i.command == arg) {
                             Some(item) => {
-                                self.print_long_help(&item);
+                                self.print_long_help(item);
                             }
                             None => {
                                 writeln!(self.context, "I can't help with {:?}", arg).unwrap();
@@ -358,7 +359,7 @@ where
                         _ => {
                             writeln!(self.context, "AVAILABLE ITEMS:").unwrap();
                             for item in menu.items {
-                                self.print_short_help(&item);
+                                self.print_short_help(item);
                             }
                             if self.depth != 0 {
                                 self.print_short_help(&Item {
@@ -572,44 +573,68 @@ where
     ) {
         let mandatory_parameter_count = parameters
             .iter()
-            .filter(|p| match p {
-                Parameter::Mandatory { .. } => true,
-                _ => false,
-            })
+            .filter(|p| matches!(p, Parameter::Mandatory { .. },))
             .count();
         let positional_parameter_count = parameters
             .iter()
-            .filter(|p| match p {
-                Parameter::Mandatory { .. } => true,
-                Parameter::Optional { .. } => true,
-                _ => false,
-            })
+            .filter(|p| matches!(p, Parameter::Mandatory { .. } | Parameter::Optional { .. }))
             .count();
         if command.len() >= item.command.len() {
             // Maybe arguments
             let mut argument_buffer: [&str; 16] = [""; 16];
             let mut argument_count = 0;
             let mut positional_arguments = 0;
-            for (slot, arg) in argument_buffer
-                .iter_mut()
-                .zip(command[item.command.len()..].split_whitespace())
-            {
-                *slot = arg;
-                argument_count += 1;
-                if arg.starts_with("--") {
+            // buffer of characters and lengths
+            let mut buf = [([0u8; 32], 0_usize); 16];
+            let mut quoted = false;
+            let mut next = 0;
+            let chars = command[item.command.len()..].chars();
+            for c in chars {
+                match c {
+                    '"' => {
+                        quoted = !quoted;
+                    }
+                    ' ' => {
+                        if quoted {
+                            buf[argument_count].0[next] = c as u8;
+                            next += 1;
+                        } else {
+                            argument_count += 1;
+                            buf[argument_count].1 = next;
+                            next = 0;
+                        }
+                    }
+                    _ => {
+                        buf[argument_count].0[next] = c as u8;
+                        next += 1;
+                    }
+                }
+                buf[argument_count].1 = next;
+            }
+            let mut index = 0;
+            for arr in buf.iter() {
+                if arr.1 != 0 {
+                    if let Ok(value) = core::str::from_utf8(&arr.0[0..arr.1]) {
+                        argument_buffer[index] = value;
+                        index += 1;
+                    }
+                }
+            }
+            for arg in argument_buffer.iter() {
+                if let Some(arg) = arg.strip_prefix("--") {
                     // Validate named argument
                     let mut found = false;
                     for param in parameters.iter() {
                         match param {
                             Parameter::Named { parameter_name, .. } => {
-                                if &arg[2..] == *parameter_name {
+                                if &arg == parameter_name {
                                     found = true;
                                     break;
                                 }
                             }
                             Parameter::NamedValue { parameter_name, .. } => {
                                 if arg.contains('=') {
-                                    if let Some(given_name) = arg[2..].split('=').next() {
+                                    if let Some(given_name) = arg.split('=').next() {
                                         if given_name == *parameter_name {
                                             found = true;
                                             break;
@@ -626,7 +651,7 @@ where
                         writeln!(context, "Error: Did not understand {:?}", arg).unwrap();
                         return;
                     }
-                } else {
+                } else if !arg.is_empty() {
                     positional_arguments += 1;
                 }
             }
