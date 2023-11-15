@@ -377,7 +377,6 @@ where
                         cb_fn(menu, &mut self.context);
                     }
                     self.menu.pop_menu();
-
                 } else {
                     let mut found = false;
                     for (i, item) in menu.items.iter().enumerate() {
@@ -395,9 +394,7 @@ where
                                     command_line,
                                 ),
                                 ItemType::Menu(_) => {
-
-                                    if let Some(cb_fn) = self.menu.get_menu(None).entry
-                                    {
+                                    if let Some(cb_fn) = self.menu.get_menu(None).entry {
                                         cb_fn(menu, &mut self.context);
                                     }
                                     self.menu.push_menu(i);
