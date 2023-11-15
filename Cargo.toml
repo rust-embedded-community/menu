@@ -4,8 +4,8 @@ version = "0.3.2"
 authors = ["Jonathan 'theJPster' Pallant <github@thejpster.org.uk>"]
 description = "A simple #[no_std] command line interface."
 license = "MIT OR Apache-2.0"
-edition = "2018"
-repository = "https://github.com/thejpster/menu"
+edition = "2021"
+repository = "https://github.com/rust-embedded-community/menu"
 readme = "README.md"
 
 [dependencies]
@@ -14,7 +14,6 @@ readme = "README.md"
 [features]
 default = ["echo"]
 echo = []
-
 
 [dev-dependencies]
 pancurses = "0.16"
