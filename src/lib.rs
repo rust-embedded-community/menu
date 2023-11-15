@@ -232,6 +232,17 @@ enum Outcome {
     NeedMore,
 }
 
+impl<'a, T> core::clone::Clone for Menu<'a, T> {
+    fn clone(&self) -> Menu<'a, T> {
+        Menu {
+            label: self.label,
+            items: self.items,
+            entry: self.entry,
+            exit: self.exit,
+        }
+    }
+}
+
 impl<'a, T> Runner<'a, T>
 where
     T: core::fmt::Write,
