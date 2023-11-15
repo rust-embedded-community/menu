@@ -169,13 +169,17 @@ It contains multiple paragraphs and should be preceeded by the parameter list.
 
 ### Unreleased changes
 
-* Changed the `struct Runner` to own the `struct Menu` instead of borrowing it.
+* None
+
+### v0.4.0
+
+* Changed the `struct Runner` to own the `struct Menu` instead of borrowing it
 * Made `struct Menu` implement `Clone`
 * Add the possibility to disable local echo (via echo feature, enabled by default)
 
 ### v0.3.2
 
-* Shortened help output.
+* Shortened help output
 
 ### v0.3.1
 
