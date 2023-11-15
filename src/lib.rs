@@ -5,6 +5,8 @@
 #![no_std]
 #![deny(missing_docs)]
 
+mod menu_manager;
+
 /// The type of function we call when we enter/exit a menu.
 pub type MenuCallbackFn<T> = fn(menu: &Menu<T>, context: &mut T);
 
@@ -107,9 +109,8 @@ where
 {
     buffer: &'a mut [u8],
     used: usize,
-    /// Maximum four levels deep
-    menus: [Option<&'a Menu<'a, T>>; 4],
-    depth: usize,
+    menu: menu_manager::MenuManager<'a, T>,
+
     /// The context object the `Runner` carries around.
     pub context: T,
 }
@@ -239,13 +240,12 @@ where
     /// buffer that the `Runner` can use. Feel free to pass anything as the
     /// `context` type - the only requirement is that the `Runner` can
     /// `write!` to the context, which it will do for all text output.
-    pub fn new(menu: &'a Menu<'a, T>, buffer: &'a mut [u8], mut context: T) -> Runner<'a, T> {
+    pub fn new(menu: Menu<'a, T>, buffer: &'a mut [u8], mut context: T) -> Runner<'a, T> {
         if let Some(cb_fn) = menu.entry {
-            cb_fn(menu, &mut context);
+            cb_fn(&menu, &mut context);
         }
         let mut r = Runner {
-            menus: [Some(menu), None, None, None],
-            depth: 0,
+            menu: menu_manager::MenuManager::new(menu),
             buffer,
             used: 0,
             context,
@@ -260,15 +260,13 @@ where
         if newline {
             writeln!(self.context).unwrap();
         }
-        if self.depth != 0 {
-            let mut depth = 1;
-            while depth <= self.depth {
-                if depth > 1 {
-                    write!(self.context, "/").unwrap();
-                }
-                write!(self.context, "/{}", self.menus[depth].unwrap().label).unwrap();
-                depth += 1;
+        for i in 0..self.menu.depth() {
+            if i > 1 {
+                write!(self.context, "/").unwrap();
             }
+
+            let menu = self.menu.get_menu(Some(i));
+            write!(self.context, "/{}", menu.label).unwrap();
         }
         write!(self.context, "> ").unwrap();
     }
@@ -344,7 +342,7 @@ where
             // We have a valid string
             let mut parts = command_line.split_whitespace();
             if let Some(cmd) = parts.next() {
-                let menu = self.menus[self.depth].unwrap();
+                let menu = self.menu.get_menu(None);
                 if cmd == "help" {
                     match parts.next() {
                         Some(arg) => match menu.items.iter().find(|i| i.command == arg) {
@@ -360,7 +358,7 @@ where
                             for item in menu.items {
                                 self.print_short_help(&item);
                             }
-                            if self.depth != 0 {
+                            if self.menu.depth() != 0 {
                                 self.print_short_help(&Item {
                                     command: "exit",
                                     help: Some("Leave this menu."),
@@ -374,16 +372,15 @@ where
                             });
                         }
                     }
-                } else if cmd == "exit" && self.depth != 0 {
-                    if let Some(cb_fn) = self.menus[self.depth].as_ref().unwrap().exit {
+                } else if cmd == "exit" && self.menu.depth() != 0 {
+                    if let Some(cb_fn) = menu.exit {
                         cb_fn(menu, &mut self.context);
                     }
+                    self.menu.pop_menu();
 
-                    self.menus[self.depth] = None;
-                    self.depth -= 1;
                 } else {
                     let mut found = false;
-                    for item in menu.items {
+                    for (i, item) in menu.items.iter().enumerate() {
                         if cmd == item.command {
                             match item.item_type {
                                 ItemType::Callback {
@@ -397,15 +394,13 @@ where
                                     item,
                                     command_line,
                                 ),
-                                ItemType::Menu(m) => {
-                                    self.depth += 1;
-                                    self.menus[self.depth] = Some(m);
+                                ItemType::Menu(_) => {
 
-                                    if let Some(cb_fn) =
-                                        self.menus[self.depth].as_ref().unwrap().entry
+                                    if let Some(cb_fn) = self.menu.get_menu(None).entry
                                     {
                                         cb_fn(menu, &mut self.context);
                                     }
+                                    self.menu.push_menu(i);
                                 }
                                 ItemType::_Dummy => {
                                     unreachable!();
