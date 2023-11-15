@@ -3,9 +3,8 @@
 //! A basic command-line interface for `#![no_std]` Rust programs. Peforms
 //! zero heap allocation.
 #![no_std]
-#![deny(missing_docs)]
 
-mod menu_manager;
+pub mod menu_manager;
 
 /// The type of function we call when we enter/exit a menu.
 pub type MenuCallbackFn<T> = fn(menu: &Menu<T>, context: &mut T);
@@ -115,6 +114,15 @@ where
     pub context: T,
 }
 
+/// Describes the ways in which the API can fail
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Error {
+    /// Tried to find arguments on an item that was a `Callback` item
+    NotACallbackItem,
+    /// The argument you asked for was not found
+    NotFound,
+}
+
 /// Looks for the named parameter in the parameter list of the item, then
 /// finds the correct argument.
 ///
@@ -129,101 +137,99 @@ pub fn argument_finder<'a, T>(
     item: &'a Item<'a, T>,
     argument_list: &'a [&'a str],
     name_to_find: &'a str,
-) -> Result<Option<&'a str>, ()> {
-    if let ItemType::Callback { parameters, .. } = item.item_type {
-        // Step 1 - Find `name_to_find` in the parameter list.
-        let mut found_param = None;
-        let mut mandatory_count = 0;
-        let mut optional_count = 0;
-        for param in parameters.iter() {
-            match param {
-                Parameter::Mandatory { parameter_name, .. } => {
-                    mandatory_count += 1;
-                    if *parameter_name == name_to_find {
-                        found_param = Some((param, mandatory_count));
-                    }
+) -> Result<Option<&'a str>, Error> {
+    let ItemType::Callback { parameters, .. } = item.item_type else {
+        return Err(Error::NotACallbackItem);
+    };
+    // Step 1 - Find `name_to_find` in the parameter list.
+    let mut found_param = None;
+    let mut mandatory_count = 0;
+    let mut optional_count = 0;
+    for param in parameters.iter() {
+        match param {
+            Parameter::Mandatory { parameter_name, .. } => {
+                mandatory_count += 1;
+                if *parameter_name == name_to_find {
+                    found_param = Some((param, mandatory_count));
                 }
-                Parameter::Optional { parameter_name, .. } => {
-                    optional_count += 1;
-                    if *parameter_name == name_to_find {
-                        found_param = Some((param, optional_count));
-                    }
+            }
+            Parameter::Optional { parameter_name, .. } => {
+                optional_count += 1;
+                if *parameter_name == name_to_find {
+                    found_param = Some((param, optional_count));
                 }
-                Parameter::Named { parameter_name, .. } => {
-                    if *parameter_name == name_to_find {
-                        found_param = Some((param, 0));
-                    }
+            }
+            Parameter::Named { parameter_name, .. } => {
+                if *parameter_name == name_to_find {
+                    found_param = Some((param, 0));
                 }
-                Parameter::NamedValue { parameter_name, .. } => {
-                    if *parameter_name == name_to_find {
-                        found_param = Some((param, 0));
-                    }
+            }
+            Parameter::NamedValue { parameter_name, .. } => {
+                if *parameter_name == name_to_find {
+                    found_param = Some((param, 0));
                 }
             }
         }
-        // Step 2 - What sort of parameter is it?
-        match found_param {
-            // Step 2a - Mandatory Positional
-            Some((Parameter::Mandatory { .. }, mandatory_idx)) => {
-                // We want positional parameter number `mandatory_idx`.
-                let mut positional_args_seen = 0;
-                for arg in argument_list.iter().filter(|x| !x.starts_with("--")) {
-                    // Positional
-                    positional_args_seen += 1;
-                    if positional_args_seen == mandatory_idx {
-                        return Ok(Some(arg));
-                    }
+    }
+    // Step 2 - What sort of parameter is it?
+    match found_param {
+        // Step 2a - Mandatory Positional
+        Some((Parameter::Mandatory { .. }, mandatory_idx)) => {
+            // We want positional parameter number `mandatory_idx`.
+            let mut positional_args_seen = 0;
+            for arg in argument_list.iter().filter(|x| !x.starts_with("--")) {
+                // Positional
+                positional_args_seen += 1;
+                if positional_args_seen == mandatory_idx {
+                    return Ok(Some(arg));
                 }
-                // Valid thing to ask for but we don't have it
-                Ok(None)
             }
-            // Step 2b - Optional Positional
-            Some((Parameter::Optional { .. }, optional_idx)) => {
-                // We want positional parameter number `mandatory_count + optional_idx`.
-                let mut positional_args_seen = 0;
-                for arg in argument_list.iter().filter(|x| !x.starts_with("--")) {
-                    // Positional
-                    positional_args_seen += 1;
-                    if positional_args_seen == (mandatory_count + optional_idx) {
-                        return Ok(Some(arg));
-                    }
-                }
-                // Valid thing to ask for but we don't have it
-                Ok(None)
-            }
-            // Step 2c - Named (e.g. `--verbose`)
-            Some((Parameter::Named { parameter_name, .. }, _)) => {
-                for arg in argument_list {
-                    if arg.starts_with("--") && (&arg[2..] == *parameter_name) {
-                        return Ok(Some(""));
-                    }
-                }
-                // Valid thing to ask for but we don't have it
-                Ok(None)
-            }
-            // Step 2d - NamedValue (e.g. `--level=123`)
-            Some((Parameter::NamedValue { parameter_name, .. }, _)) => {
-                let name_start = 2;
-                let equals_start = name_start + parameter_name.len();
-                let value_start = equals_start + 1;
-                for arg in argument_list {
-                    if arg.starts_with("--")
-                        && (arg.len() >= value_start)
-                        && (arg.get(equals_start..=equals_start) == Some("="))
-                        && (arg.get(name_start..equals_start) == Some(*parameter_name))
-                    {
-                        return Ok(Some(&arg[value_start..]));
-                    }
-                }
-                // Valid thing to ask for but we don't have it
-                Ok(None)
-            }
-            // Step 2e - not found
-            _ => Err(()),
+            // Valid thing to ask for but we don't have it
+            Ok(None)
         }
-    } else {
-        // Not an item with arguments
-        Err(())
+        // Step 2b - Optional Positional
+        Some((Parameter::Optional { .. }, optional_idx)) => {
+            // We want positional parameter number `mandatory_count + optional_idx`.
+            let mut positional_args_seen = 0;
+            for arg in argument_list.iter().filter(|x| !x.starts_with("--")) {
+                // Positional
+                positional_args_seen += 1;
+                if positional_args_seen == (mandatory_count + optional_idx) {
+                    return Ok(Some(arg));
+                }
+            }
+            // Valid thing to ask for but we don't have it
+            Ok(None)
+        }
+        // Step 2c - Named (e.g. `--verbose`)
+        Some((Parameter::Named { parameter_name, .. }, _)) => {
+            for arg in argument_list {
+                if arg.starts_with("--") && (&arg[2..] == *parameter_name) {
+                    return Ok(Some(""));
+                }
+            }
+            // Valid thing to ask for but we don't have it
+            Ok(None)
+        }
+        // Step 2d - NamedValue (e.g. `--level=123`)
+        Some((Parameter::NamedValue { parameter_name, .. }, _)) => {
+            let name_start = 2;
+            let equals_start = name_start + parameter_name.len();
+            let value_start = equals_start + 1;
+            for arg in argument_list {
+                if arg.starts_with("--")
+                    && (arg.len() >= value_start)
+                    && (arg.get(equals_start..=equals_start) == Some("="))
+                    && (arg.get(name_start..equals_start) == Some(*parameter_name))
+                {
+                    return Ok(Some(&arg[value_start..]));
+                }
+            }
+            // Valid thing to ask for but we don't have it
+            Ok(None)
+        }
+        // Step 2e - not found
+        _ => Err(Error::NotFound),
     }
 }
 
@@ -358,7 +364,7 @@ where
                     match parts.next() {
                         Some(arg) => match menu.items.iter().find(|i| i.command == arg) {
                             Some(item) => {
-                                self.print_long_help(&item);
+                                self.print_long_help(item);
                             }
                             None => {
                                 writeln!(self.context, "I can't help with {:?}", arg).unwrap();
@@ -367,7 +373,7 @@ where
                         _ => {
                             writeln!(self.context, "AVAILABLE ITEMS:").unwrap();
                             for item in menu.items {
-                                self.print_short_help(&item);
+                                self.print_short_help(item);
                             }
                             if self.menu_mgr.depth() != 0 {
                                 self.print_short_help(&Item {
@@ -575,18 +581,11 @@ where
     ) {
         let mandatory_parameter_count = parameters
             .iter()
-            .filter(|p| match p {
-                Parameter::Mandatory { .. } => true,
-                _ => false,
-            })
+            .filter(|p| matches!(p, Parameter::Mandatory { .. }))
             .count();
         let positional_parameter_count = parameters
             .iter()
-            .filter(|p| match p {
-                Parameter::Mandatory { .. } => true,
-                Parameter::Optional { .. } => true,
-                _ => false,
-            })
+            .filter(|p| matches!(p, Parameter::Mandatory { .. } | Parameter::Optional { .. }))
             .count();
         if command.len() >= item.command.len() {
             // Maybe arguments
@@ -599,20 +598,20 @@ where
             {
                 *slot = arg;
                 argument_count += 1;
-                if arg.starts_with("--") {
+                if let Some(tail) = arg.strip_prefix("--") {
                     // Validate named argument
                     let mut found = false;
                     for param in parameters.iter() {
                         match param {
                             Parameter::Named { parameter_name, .. } => {
-                                if &arg[2..] == *parameter_name {
+                                if tail == *parameter_name {
                                     found = true;
                                     break;
                                 }
                             }
                             Parameter::NamedValue { parameter_name, .. } => {
                                 if arg.contains('=') {
-                                    if let Some(given_name) = arg[2..].split('=').next() {
+                                    if let Some(given_name) = tail.split('=').next() {
                                         if given_name == *parameter_name {
                                             found = true;
                                             break;
@@ -698,7 +697,10 @@ mod tests {
             Ok(Some("c"))
         );
         // Not an argument
-        assert_eq!(argument_finder(&item, &["a", "b", "c"], "quux"), Err(()));
+        assert_eq!(
+            argument_finder(&item, &["a", "b", "c"], "quux"),
+            Err(Error::NotFound)
+        );
     }
 
     #[test]
@@ -737,7 +739,10 @@ mod tests {
             Ok(Some("c"))
         );
         // Not an argument
-        assert_eq!(argument_finder(&item, &["a", "b", "c"], "quux"), Err(()));
+        assert_eq!(
+            argument_finder(&item, &["a", "b", "c"], "quux"),
+            Err(Error::NotFound)
+        );
         // Missing optional
         assert_eq!(argument_finder(&item, &["a", "b"], "baz"), Ok(None));
     }
@@ -780,7 +785,7 @@ mod tests {
         // Not an argument
         assert_eq!(
             argument_finder(&item, &["a", "--bar", "--baz"], "quux"),
-            Err(())
+            Err(Error::NotFound)
         );
         // Missing named
         assert_eq!(argument_finder(&item, &["a"], "baz"), Ok(None));
@@ -845,7 +850,7 @@ mod tests {
         // Not an argument
         assert_eq!(
             argument_finder(&item, &["a", "--bar", "--baz"], "quux"),
-            Err(())
+            Err(Error::NotFound)
         );
         // Missing named
         assert_eq!(argument_finder(&item, &["a"], "baz"), Ok(None));
