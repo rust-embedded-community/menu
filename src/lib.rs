@@ -109,7 +109,7 @@ where
 {
     buffer: &'a mut [u8],
     used: usize,
-    menu: menu_manager::MenuManager<'a, T>,
+    menu_mgr: menu_manager::MenuManager<'a, T>,
 
     /// The context object the `Runner` carries around.
     pub context: T,
@@ -256,7 +256,7 @@ where
             cb_fn(&menu, &mut context);
         }
         let mut r = Runner {
-            menu: menu_manager::MenuManager::new(menu),
+            menu_mgr: menu_manager::MenuManager::new(menu),
             buffer,
             used: 0,
             context,
@@ -271,12 +271,12 @@ where
         if newline {
             writeln!(self.context).unwrap();
         }
-        for i in 0..self.menu.depth() {
+        for i in 0..self.menu_mgr.depth() {
             if i > 1 {
                 write!(self.context, "/").unwrap();
             }
 
-            let menu = self.menu.get_menu(Some(i));
+            let menu = self.menu_mgr.get_menu(Some(i));
             write!(self.context, "/{}", menu.label).unwrap();
         }
         write!(self.context, "> ").unwrap();
@@ -353,7 +353,7 @@ where
             // We have a valid string
             let mut parts = command_line.split_whitespace();
             if let Some(cmd) = parts.next() {
-                let menu = self.menu.get_menu(None);
+                let menu = self.menu_mgr.get_menu(None);
                 if cmd == "help" {
                     match parts.next() {
                         Some(arg) => match menu.items.iter().find(|i| i.command == arg) {
@@ -369,7 +369,7 @@ where
                             for item in menu.items {
                                 self.print_short_help(&item);
                             }
-                            if self.menu.depth() != 0 {
+                            if self.menu_mgr.depth() != 0 {
                                 self.print_short_help(&Item {
                                     command: "exit",
                                     help: Some("Leave this menu."),
@@ -383,11 +383,11 @@ where
                             });
                         }
                     }
-                } else if cmd == "exit" && self.menu.depth() != 0 {
+                } else if cmd == "exit" && self.menu_mgr.depth() != 0 {
                     if let Some(cb_fn) = menu.exit {
                         cb_fn(menu, &mut self.context);
                     }
-                    self.menu.pop_menu();
+                    self.menu_mgr.pop_menu();
                 } else {
                     let mut found = false;
                     for (i, item) in menu.items.iter().enumerate() {
@@ -405,10 +405,10 @@ where
                                     command_line,
                                 ),
                                 ItemType::Menu(_) => {
-                                    if let Some(cb_fn) = self.menu.get_menu(None).entry {
+                                    if let Some(cb_fn) = self.menu_mgr.get_menu(None).entry {
                                         cb_fn(menu, &mut self.context);
                                     }
-                                    self.menu.push_menu(i);
+                                    self.menu_mgr.push_menu(i);
                                 }
                                 ItemType::_Dummy => {
                                     unreachable!();
