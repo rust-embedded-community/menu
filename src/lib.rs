@@ -109,7 +109,7 @@ where
     buffer: &'a mut [u8],
     used: usize,
     menu_mgr: menu_manager::MenuManager<'a, I, T>,
-    interface: I,
+    pub interface: I,
 }
 
 /// Describes the ways in which the API can fail
