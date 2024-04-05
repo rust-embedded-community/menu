@@ -4,7 +4,12 @@ use menu::*;
 use pancurses::{endwin, initscr, noecho, Input};
 use std::fmt::Write;
 
-const ROOT_MENU: Menu<Output> = Menu {
+#[derive(Default)]
+struct Context {
+    _data: u32,
+}
+
+const ROOT_MENU: Menu<Output, Context> = Menu {
     label: "root",
     items: &[
         &Item {
@@ -94,21 +99,22 @@ fn main() {
     window.scrollok(true);
     noecho();
     let mut buffer = [0u8; 64];
-    let mut r = Runner::new(ROOT_MENU, &mut buffer, Output(window));
+    let mut context = Context::default();
+    let mut r = Runner::new(ROOT_MENU, &mut buffer, Output(window), &mut context);
     loop {
-        match r.context.0.getch() {
+        match r.interface.0.getch() {
             Some(Input::Character('\n')) => {
-                r.input_byte(b'\r');
+                r.input_byte(b'\r', &mut context);
             }
             Some(Input::Character(c)) => {
                 let mut buf = [0; 4];
                 for b in c.encode_utf8(&mut buf).bytes() {
-                    r.input_byte(b);
+                    r.input_byte(b, &mut context);
                 }
             }
             Some(Input::KeyDC) => break,
             Some(input) => {
-                r.context.0.addstr(&format!("{:?}", input));
+                r.interface.0.addstr(&format!("{:?}", input));
             }
             None => (),
         }
@@ -116,69 +122,88 @@ fn main() {
     endwin();
 }
 
-fn enter_root(_menu: &Menu<Output>, context: &mut Output) {
-    writeln!(context, "In enter_root").unwrap();
+fn enter_root(_menu: &Menu<Output, Context>, _context: &mut Context, interface: &mut Output) {
+    writeln!(interface, "In enter_root").unwrap();
 }
 
-fn exit_root(_menu: &Menu<Output>, context: &mut Output) {
-    writeln!(context, "In exit_root").unwrap();
+fn exit_root(_menu: &Menu<Output, Context>, _context: &mut Context, interface: &mut Output) {
+    writeln!(interface, "In exit_root").unwrap();
 }
 
-fn select_foo<'a>(_menu: &Menu<Output>, item: &Item<Output>, args: &[&str], context: &mut Output) {
-    writeln!(context, "In select_foo. Args = {:?}", args).unwrap();
+fn select_foo(
+    _menu: &Menu<Output, Context>,
+    item: &Item<Output, Context>,
+    args: &[&str],
+    _context: &mut Context,
+    interface: &mut Output,
+) {
+    writeln!(interface, "In select_foo. Args = {:?}", args).unwrap();
     writeln!(
-        context,
+        interface,
         "a = {:?}",
         ::menu::argument_finder(item, args, "a")
     )
     .unwrap();
     writeln!(
-        context,
+        interface,
         "b = {:?}",
         ::menu::argument_finder(item, args, "b")
     )
     .unwrap();
     writeln!(
-        context,
+        interface,
         "verbose = {:?}",
         ::menu::argument_finder(item, args, "verbose")
     )
     .unwrap();
     writeln!(
-        context,
+        interface,
         "level = {:?}",
         ::menu::argument_finder(item, args, "level")
     )
     .unwrap();
     writeln!(
-        context,
+        interface,
         "no_such_arg = {:?}",
         ::menu::argument_finder(item, args, "no_such_arg")
     )
     .unwrap();
 }
 
-fn select_bar<'a>(_menu: &Menu<Output>, _item: &Item<Output>, args: &[&str], context: &mut Output) {
-    writeln!(context, "In select_bar. Args = {:?}", args).unwrap();
-}
-
-fn enter_sub(_menu: &Menu<Output>, context: &mut Output) {
-    writeln!(context, "In enter_sub").unwrap();
-}
-
-fn exit_sub(_menu: &Menu<Output>, context: &mut Output) {
-    writeln!(context, "In exit_sub").unwrap();
-}
-
-fn select_baz<'a>(_menu: &Menu<Output>, _item: &Item<Output>, args: &[&str], context: &mut Output) {
-    writeln!(context, "In select_baz: Args = {:?}", args).unwrap();
-}
-
-fn select_quux<'a>(
-    _menu: &Menu<Output>,
-    _item: &Item<Output>,
+fn select_bar(
+    _menu: &Menu<Output, Context>,
+    _item: &Item<Output, Context>,
     args: &[&str],
-    context: &mut Output,
+    _context: &mut Context,
+    interface: &mut Output,
 ) {
-    writeln!(context, "In select_quux: Args = {:?}", args).unwrap();
+    writeln!(interface, "In select_bar. Args = {:?}", args).unwrap();
+}
+
+fn enter_sub(_menu: &Menu<Output, Context>, _context: &mut Context, interface: &mut Output) {
+    writeln!(interface, "In enter_sub").unwrap();
+}
+
+fn exit_sub(_menu: &Menu<Output, Context>, _context: &mut Context, interface: &mut Output) {
+    writeln!(interface, "In exit_sub").unwrap();
+}
+
+fn select_baz(
+    _menu: &Menu<Output, Context>,
+    _item: &Item<Output, Context>,
+    args: &[&str],
+    _context: &mut Context,
+    interface: &mut Output,
+) {
+    writeln!(interface, "In select_baz: Args = {:?}", args).unwrap();
+}
+
+fn select_quux(
+    _menu: &Menu<Output, Context>,
+    _item: &Item<Output, Context>,
+    args: &[&str],
+    _context: &mut Context,
+    interface: &mut Output,
+) {
+    writeln!(interface, "In select_quux: Args = {:?}", args).unwrap();
 }
