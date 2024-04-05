@@ -6,7 +6,7 @@ use std::fmt::Write;
 
 #[derive(Default)]
 struct Context {
-    _data: u32,
+    _inner: u32,
 }
 
 const ROOT_MENU: Menu<Output, Context> = Menu {
