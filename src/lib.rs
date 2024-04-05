@@ -675,7 +675,7 @@ mod tests {
         _item: &Item<(), u32>,
         _args: &[&str],
         _context: &mut u32,
-        _interface: (),
+        _interface: &mut (),
     ) {
     }
 
