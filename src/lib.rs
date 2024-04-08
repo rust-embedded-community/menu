@@ -7,10 +7,10 @@
 pub mod menu_manager;
 
 /// The type of function we call when we enter/exit a menu.
-pub type MenuCallbackFn<C> = fn(menu: &Menu<C>, context: &mut C);
+pub type MenuCallbackFn<T> = fn(menu: &Menu<T>, context: &mut T);
 
 /// The type of function we call when we a valid command has been entered.
-pub type ItemCallbackFn<C> = fn(menu: &Menu<C>, item: &Item<C>, args: &[&str], context: &mut C);
+pub type ItemCallbackFn<T> = fn(menu: &Menu<T>, item: &Item<T>, args: &[&str], context: &mut T);
 
 #[derive(Debug)]
 /// Describes a parameter to the command
@@ -49,19 +49,19 @@ pub enum Parameter<'a> {
 
 /// Do we enter a sub-menu when this command is entered, or call a specific
 /// function?
-pub enum ItemType<'a, C>
+pub enum ItemType<'a, T>
 where
-    C: 'a,
+    T: 'a,
 {
     /// Call a function when this command is entered
     Callback {
         /// The function to call
-        function: ItemCallbackFn<C>,
+        function: ItemCallbackFn<T>,
         /// The list of parameters for this function. Pass an empty list if there aren't any.
         parameters: &'a [Parameter<'a>],
     },
     /// This item is a sub-menu you can enter
-    Menu(&'a Menu<'a, C>),
+    Menu(&'a Menu<'a, T>),
     /// Internal use only - do not use
     _Dummy,
 }
@@ -69,9 +69,9 @@ where
 /// An `Item` is a what our menus are made from. Each item has a `name` which
 /// you have to enter to select this item. Each item can also have zero or
 /// more parameters, and some optional help text.
-pub struct Item<'a, C>
+pub struct Item<'a, T>
 where
-    C: 'a,
+    T: 'a,
 {
     /// The word you need to enter to activate this item. It is recommended
     /// that you avoid whitespace in this string.
@@ -79,35 +79,35 @@ where
     /// Optional help text. Printed if you enter `help`.
     pub help: Option<&'a str>,
     /// The type of this item - menu, callback, etc.
-    pub item_type: ItemType<'a, C>,
+    pub item_type: ItemType<'a, T>,
 }
 
 /// A `Menu` is made of one or more `Item`s.
-pub struct Menu<'a, C>
+pub struct Menu<'a, T>
 where
-    C: 'a,
+    T: 'a,
 {
     /// Each menu has a label which is visible in the prompt, unless you are
     /// the root menu.
     pub label: &'a str,
     /// A slice of menu items in this menu.
-    pub items: &'a [&'a Item<'a, C>],
+    pub items: &'a [&'a Item<'a, T>],
     /// A function to call when this menu is entered. If this is the root menu, this is called when the runner is created.
-    pub entry: Option<MenuCallbackFn<C>>,
+    pub entry: Option<MenuCallbackFn<T>>,
     /// A function to call when this menu is exited. Never called for the root menu.
-    pub exit: Option<MenuCallbackFn<C>>,
+    pub exit: Option<MenuCallbackFn<T>>,
 }
 
 /// This structure handles the menu. You feed it bytes as they are read from
 /// the console and it executes menu actions when commands are typed in
 /// (followed by Enter).
-pub struct Runner<'a, C>
+pub struct Runner<'a, T>
 where
-    C: embedded_io::Write + embedded_io::Read + embedded_io::ReadReady,
+    T: embedded_io::Write + embedded_io::Read + embedded_io::ReadReady,
 {
     buffer: &'a mut [u8],
     used: usize,
-    menu_mgr: menu_manager::MenuManager<'a, C>,
+    menu_mgr: menu_manager::MenuManager<'a, T>,
 }
 
 /// Describes the ways in which the API can fail
@@ -129,8 +129,8 @@ pub enum Error {
 ///   (and hence doesn't take a value).
 /// * Returns `Err(())` if `parameter_name` was not in `item.parameter_list`
 ///   or `item` wasn't an Item::Callback
-pub fn argument_finder<'a, C>(
-    item: &'a Item<'a, C>,
+pub fn argument_finder<'a, T>(
+    item: &'a Item<'a, T>,
     argument_list: &'a [&'a str],
     name_to_find: &'a str,
 ) -> Result<Option<&'a str>, Error> {
@@ -234,8 +234,8 @@ enum Outcome {
     NeedMore,
 }
 
-impl<'a, C> core::clone::Clone for Menu<'a, C> {
-    fn clone(&self) -> Menu<'a, C> {
+impl<'a, T> core::clone::Clone for Menu<'a, T> {
+    fn clone(&self) -> Menu<'a, T> {
         Menu {
             label: self.label,
             items: self.items,
@@ -245,15 +245,15 @@ impl<'a, C> core::clone::Clone for Menu<'a, C> {
     }
 }
 
-impl<'a, C> Runner<'a, C>
+impl<'a, T> Runner<'a, T>
 where
-    C: embedded_io::Write + embedded_io::Read + embedded_io::ReadReady,
+    T: embedded_io::Write + embedded_io::Read + embedded_io::ReadReady,
 {
     /// Create a new `Runner`. You need to supply a top-level menu, and a
     /// buffer that the `Runner` can use. Feel free to pass anything as the
     /// `context` type - the only requirement is that the `Runner` can
     /// `write!` to the context, which it will do for all text output.
-    pub fn new(menu: Menu<'a, C>, buffer: &'a mut [u8], context: &mut C) -> Self {
+    pub fn new(menu: Menu<'a, T>, buffer: &'a mut [u8], context: &mut T) -> Self {
         if let Some(cb_fn) = menu.entry {
             cb_fn(&menu, context);
         }
@@ -268,7 +268,7 @@ where
 
     /// Print out a new command prompt, including sub-menu names if
     /// applicable.
-    pub fn prompt(&mut self, newline: bool, context: &mut C) {
+    pub fn prompt(&mut self, newline: bool, context: &mut T) {
         if newline {
             writeln!(context).unwrap();
         }
@@ -286,7 +286,7 @@ where
     /// Process input data for command lines.
     ///
     /// By default, an echo feature is enabled to display commands on the terminal.
-    pub fn process(&mut self, context: &mut C) {
+    pub fn process(&mut self, context: &mut T) {
         while context.read_ready().unwrap() {
             let mut input_buf = [0; 1];
             context.read(&mut input_buf).unwrap();
@@ -354,7 +354,7 @@ where
     }
 
     /// Scan the buffer and do the right thing based on its contents.
-    fn process_command(&mut self, context: &mut C) {
+    fn process_command(&mut self, context: &mut T) {
         // Go to the next line, below the prompt
         writeln!(context).unwrap();
         if let Ok(command_line) = core::str::from_utf8(&self.buffer[0..self.used]) {
@@ -447,7 +447,7 @@ where
         }
     }
 
-    fn print_short_help(&mut self, context: &mut C, item: &Item<C>) {
+    fn print_short_help(&mut self, context: &mut T, item: &Item<T>) {
         let mut has_options = false;
         match item.item_type {
             ItemType::Callback { parameters, .. } => {
@@ -484,7 +484,7 @@ where
         writeln!(context).unwrap();
     }
 
-    fn print_long_help(&mut self, context: &mut C, item: &Item<C>) {
+    fn print_long_help(&mut self, context: &mut T, item: &Item<T>) {
         writeln!(context, "SUMMARY:").unwrap();
         match item.item_type {
             ItemType::Callback { parameters, .. } => {
@@ -582,11 +582,11 @@ where
     }
 
     fn call_function(
-        context: &mut C,
-        callback_function: ItemCallbackFn<C>,
+        context: &mut T,
+        callback_function: ItemCallbackFn<T>,
         parameters: &[Parameter],
-        parent_menu: &Menu<C>,
-        item: &Item<C>,
+        parent_menu: &Menu<T>,
+        item: &Item<T>,
         command: &str,
     ) {
         let mandatory_parameter_count = parameters
