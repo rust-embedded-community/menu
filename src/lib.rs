@@ -250,9 +250,13 @@ where
     T: embedded_io::Write + embedded_io::Read + embedded_io::ReadReady,
 {
     /// Create a new `Runner`. You need to supply a top-level menu, and a
-    /// buffer that the `Runner` can use. Feel free to pass anything as the
-    /// `context` type - the only requirement is that the `Runner` can
-    /// `write!` to the context, which it will do for all text output.
+    /// buffer that the `Runner` can use.
+    ///
+    /// The `context` parameter is used for handling I/O of the menu. It must implement the
+    /// respective [`embedded-io`] traits to enable the menu to process input and output.
+    ///
+    /// The `context` is also passed to menu callback functions, so it can be used for maintaining
+    /// state of anything that the menu may control as well.
     pub fn new(menu: Menu<'a, T>, buffer: &'a mut [u8], context: &mut T) -> Self {
         if let Some(cb_fn) = menu.entry {
             cb_fn(&menu, context);
