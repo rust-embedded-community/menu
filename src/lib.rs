@@ -7,11 +7,11 @@
 pub mod menu_manager;
 
 /// The type of function we call when we enter/exit a menu.
-pub type MenuCallbackFn<I, T> = fn(menu: &Menu<I, T>, context: &mut T, interface: &mut I);
+pub type MenuCallbackFn<I, T> = fn(menu: &Menu<I, T>, interface: &mut I, context: &mut T);
 
 /// The type of function we call when we a valid command has been entered.
 pub type ItemCallbackFn<I, T> =
-    fn(menu: &Menu<I, T>, item: &Item<I, T>, args: &[&str], context: &mut T, interface: &mut I);
+    fn(menu: &Menu<I, T>, item: &Item<I, T>, args: &[&str], interface: &mut I, context: &mut T);
 
 #[derive(Debug)]
 /// Describes a parameter to the command
@@ -262,7 +262,7 @@ where
         context: &mut T,
     ) -> Self {
         if let Some(cb_fn) = menu.entry {
-            cb_fn(&menu, context, &mut interface);
+            cb_fn(&menu, &mut interface, context);
         }
         let mut r = Runner {
             menu_mgr: menu_manager::MenuManager::new(menu),
@@ -394,7 +394,7 @@ where
                     }
                 } else if cmd == "exit" && self.menu_mgr.depth() != 0 {
                     if let Some(cb_fn) = menu.exit {
-                        cb_fn(menu, context, &mut self.interface);
+                        cb_fn(menu, &mut self.interface, context);
                     }
                     self.menu_mgr.pop_menu();
                 } else {
@@ -416,7 +416,7 @@ where
                                 ),
                                 ItemType::Menu(_) => {
                                     if let Some(cb_fn) = self.menu_mgr.get_menu(None).entry {
-                                        cb_fn(menu, context, &mut self.interface);
+                                        cb_fn(menu, &mut self.interface, context);
                                     }
                                     self.menu_mgr.push_menu(i);
                                 }
@@ -651,14 +651,14 @@ where
                     parent_menu,
                     item,
                     &argument_buffer[0..argument_count],
-                    context,
                     interface,
+                    context,
                 );
             }
         } else {
             // Definitely no arguments
             if mandatory_parameter_count == 0 {
-                callback_function(parent_menu, item, &[], context, interface);
+                callback_function(parent_menu, item, &[], interface, context);
             } else {
                 writeln!(interface, "Error: Insufficient arguments given").unwrap();
             }
@@ -674,8 +674,8 @@ mod tests {
         _menu: &Menu<(), u32>,
         _item: &Item<(), u32>,
         _args: &[&str],
-        _context: &mut u32,
         _interface: &mut (),
+        _context: &mut u32,
     ) {
     }
 

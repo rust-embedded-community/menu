@@ -122,11 +122,11 @@ fn main() {
     endwin();
 }
 
-fn enter_root(_menu: &Menu<Output, Context>, _context: &mut Context, interface: &mut Output) {
+fn enter_root(_menu: &Menu<Output, Context>, interface: &mut Output, _context: &mut Context) {
     writeln!(interface, "In enter_root").unwrap();
 }
 
-fn exit_root(_menu: &Menu<Output, Context>, _context: &mut Context, interface: &mut Output) {
+fn exit_root(_menu: &Menu<Output, Context>, interface: &mut Output, _context: &mut Context) {
     writeln!(interface, "In exit_root").unwrap();
 }
 
@@ -134,8 +134,8 @@ fn select_foo(
     _menu: &Menu<Output, Context>,
     item: &Item<Output, Context>,
     args: &[&str],
-    _context: &mut Context,
     interface: &mut Output,
+    _context: &mut Context,
 ) {
     writeln!(interface, "In select_foo. Args = {:?}", args).unwrap();
     writeln!(
@@ -174,17 +174,17 @@ fn select_bar(
     _menu: &Menu<Output, Context>,
     _item: &Item<Output, Context>,
     args: &[&str],
-    _context: &mut Context,
     interface: &mut Output,
+    _context: &mut Context,
 ) {
     writeln!(interface, "In select_bar. Args = {:?}", args).unwrap();
 }
 
-fn enter_sub(_menu: &Menu<Output, Context>, _context: &mut Context, interface: &mut Output) {
+fn enter_sub(_menu: &Menu<Output, Context>, interface: &mut Output, _context: &mut Context) {
     writeln!(interface, "In enter_sub").unwrap();
 }
 
-fn exit_sub(_menu: &Menu<Output, Context>, _context: &mut Context, interface: &mut Output) {
+fn exit_sub(_menu: &Menu<Output, Context>, interface: &mut Output, _context: &mut Context) {
     writeln!(interface, "In exit_sub").unwrap();
 }
 
@@ -192,8 +192,8 @@ fn select_baz(
     _menu: &Menu<Output, Context>,
     _item: &Item<Output, Context>,
     args: &[&str],
-    _context: &mut Context,
     interface: &mut Output,
+    _context: &mut Context,
 ) {
     writeln!(interface, "In select_baz: Args = {:?}", args).unwrap();
 }
@@ -202,8 +202,8 @@ fn select_quux(
     _menu: &Menu<Output, Context>,
     _item: &Item<Output, Context>,
     args: &[&str],
-    _context: &mut Context,
     interface: &mut Output,
+    _context: &mut Context,
 ) {
     writeln!(interface, "In select_quux: Args = {:?}", args).unwrap();
 }
