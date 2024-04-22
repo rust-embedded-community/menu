@@ -301,10 +301,11 @@ where
                 #[cfg(not(feature = "echo"))]
                 {
                     // Echo the command
-                    context.write_all(b"\r").unwrap();
-                    context.write_all(&self.buffer[..self.used]).unwrap();
+                    write!(context, "\r").unwrap();
+                    if let Ok(s) = core::str::from_utf8(&self.buffer[0..self.used]) {
+                        write!(context, "{}", s).unwrap();
+                    }
                 }
-
                 // Handle the command
                 self.process_command(context);
                 Outcome::CommandProcessed
