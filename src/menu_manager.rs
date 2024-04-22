@@ -5,17 +5,17 @@ use super::{ItemType, Menu};
 
 /// Holds a nested tree of Menus and remembers which menu within the tree we're
 /// currently looking at.
-pub struct MenuManager<'a, C> {
-    menu: Menu<'a, C>,
+pub struct MenuManager<'a, I, T> {
+    menu: Menu<'a, I, T>,
     /// Maximum four levels deep
     menu_index: [Option<usize>; 4],
 }
 
-impl<'a, C> MenuManager<'a, C> {
+impl<'a, I, T> MenuManager<'a, I, T> {
     /// Create a new MenuManager.
     ///
     /// You will be at the top-level.
-    pub fn new(menu: Menu<'a, C>) -> Self {
+    pub fn new(menu: Menu<'a, I, T>) -> Self {
         Self {
             menu,
             menu_index: [None, None, None, None],
@@ -53,7 +53,7 @@ impl<'a, C> MenuManager<'a, C> {
     ///
     /// Menus are nested. If `depth` is `None`, get the current menu. Otherwise
     /// if it is `Some(i)` get the menu at depth `i`.
-    pub fn get_menu(&self, depth: Option<usize>) -> &Menu<'a, C> {
+    pub fn get_menu(&self, depth: Option<usize>) -> &Menu<'a, I, T> {
         let mut menu = &self.menu;
 
         let depth = depth.unwrap_or_else(|| self.depth());

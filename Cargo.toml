@@ -9,7 +9,6 @@ repository = "https://github.com/rust-embedded-community/menu"
 readme = "README.md"
 
 [dependencies]
-embedded-io = "0.6"
 
 
 [features]
