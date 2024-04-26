@@ -7,7 +7,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased](https://github.com/rust-embedded-community/menu/compare/v0.4.0...master)
 
+* None
+
+## [v0.5.0] - 2024-04-26
+
 ### Changed
+
 * [breaking] The `menu` `Context` is now borrowed during I/O input processing to support borrowed data
 * [breaking] The `pub context` item on the runner was updated to `pub interface`
 
@@ -16,6 +21,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 Note: Changes before this version were not tracked via the CHANGELOG
 
 ### Changed
+
 * Changed the struct `Runner` to own the struct `Menu` instead of borrowing it
 
 ### Added
