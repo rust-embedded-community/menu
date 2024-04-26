@@ -10,7 +10,7 @@ there's also no automatic conversion to integers, boolean, etc.
 
 ```console
 user@host: ~/menu $ cargo run --example simple
-   Compiling menu v0.2.0 (file:///home/user/menu)
+   Compiling menu v0.5.0 (file:///home/user/menu)
     Finished dev [unoptimized + debuginfo] target(s) in 0.84 secs
      Running `target/debug/examples/simple`
 In enter_root()
