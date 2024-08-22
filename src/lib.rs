@@ -414,9 +414,9 @@ where
                                     item,
                                     command_line,
                                 ),
-                                ItemType::Menu(_) => {
-                                    if let Some(cb_fn) = self.menu_mgr.get_menu(None).entry {
-                                        cb_fn(menu, &mut self.interface, context);
+                                ItemType::Menu(incoming_menu) => {
+                                    if let Some(cb_fn) = incoming_menu.entry {
+                                        cb_fn(incoming_menu, &mut self.interface, context);
                                     }
                                     self.menu_mgr.push_menu(i);
                                 }

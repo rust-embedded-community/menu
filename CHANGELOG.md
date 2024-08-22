@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased](https://github.com/rust-embedded-community/menu/compare/v0.4.0...master)
 
-* None
+* Fix Menu entry call order
 
 ## [v0.5.0] - 2024-04-26
 
