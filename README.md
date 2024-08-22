@@ -169,7 +169,7 @@ It contains multiple paragraphs and should be preceeded by the parameter list.
 
 ### Unreleased changes
 
-* None
+* Fix Menu entry call order
 
 ### v0.4.0
 
