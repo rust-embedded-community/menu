@@ -5,7 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [Unreleased](https://github.com/rust-embedded-community/menu/compare/v0.4.0...master)
+## [Unreleased](https://github.com/rust-embedded-community/menu/compare/v0.5.1...master)
+
+* None
+
+## [v0.5.1] - 2024-08-22
+
+### Fixed
 
 * Fix Menu entry call order
 
@@ -18,15 +24,51 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [v0.4.0] - 2023-09-16
 
-Note: Changes before this version were not tracked via the CHANGELOG
-
 ### Changed
 
 * Changed the struct `Runner` to own the struct `Menu` instead of borrowing it
 
 ### Added
 
-* Made struct `Menu` implement `Clone`
+* Made `struct Menu` implement `Clone`
 * Add the possibility to disable local echo (via `echo` feature, enabled by default)
 
+## [v0.3.1] - 2019-08-11
+
+### Changed
+
+* Updated crate metadata
+
+## [v0.3.0] - 2019-08-11
+
+### Changed
+
+* Parameter / Argument support
+* Re-worked help text system
+* Example uses `pancurses`
+* Remove use of fixed width (assumes a Western set with one byte per glyph)
+
+## [v0.2.1] - 2018-10-04
+
+### Changed
+
+* Fixed broken example
+
+## [v0.2.0] - 2018-10-04
+
+* Add context to menu callback
+* Fix width of help text
+
+## [v0.1.1] - 2018-05-19
+
+* First release
+
+[v0.5.1]: https://github.com/rust-embedded-community/menu/releases/tag/v0.5.1
+[v0.5.0]: https://github.com/rust-embedded-community/menu/releases/tag/v0.5.0
 [v0.4.0]: https://github.com/rust-embedded-community/menu/releases/tag/v0.4.0
+[v0.3.2]: https://github.com/rust-embedded-community/menu/releases/tag/v0.3.2
+[v0.3.1]: https://github.com/rust-embedded-community/menu/releases/tag/v0.3.1
+[v0.3.0]: https://github.com/rust-embedded-community/menu/releases/tag/v0.3.0
+[v0.2.1]: https://github.com/rust-embedded-community/menu/releases/tag/v0.2.1
+[v0.2.0]: https://github.com/rust-embedded-community/menu/releases/tag/v0.2.0
+[v0.1.1]: https://github.com/rust-embedded-community/menu/releases/tag/v0.1.1

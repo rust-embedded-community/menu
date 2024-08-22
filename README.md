@@ -167,36 +167,16 @@ It contains multiple paragraphs and should be preceeded by the parameter list.
 
 ## Changelog
 
-### Unreleased changes
+See [`CHANGELOG.md`](./CHANGELOG.md).
 
-* Fix Menu entry call order
+## License
 
-### v0.4.0
+The contents of this repository are dual-licensed under the _MIT OR Apache 2.0_
+License. That means you can choose either the MIT license or the Apache 2.0
+license when you re-use this code. See [`LICENSE-MIT`](./LICENSE-MIT) or
+[`LICENSE-APACHE`](./LICENSE-APACHE) for more information on each specific
+license. Our Apache 2.0 notices can be found in [`NOTICE`](./NOTICE).
 
-* Changed the `struct Runner` to own the `struct Menu` instead of borrowing it
-* Made `struct Menu` implement `Clone`
-* Add the possibility to disable local echo (via echo feature, enabled by default)
-
-### v0.3.2
-
-* Shortened help output
-
-### v0.3.1
-
-* Updated crate metadata
-
-### v0.3.0
-
-* Parameter / Argument support
-* Re-worked help text system
-* Example uses `pancurses`
-* Remove use of fixed width (assumes a Western set with one byte per glyph)
-
-### v0.2.0
-
-* Add context to menu callback
-* Fix width of help text
-
-### v0.1.0
-
-* First release
+Unless you explicitly state otherwise, any contribution intentionally submitted
+for inclusion in the work by you, as defined in the Apache-2.0 license, shall be
+dual licensed as above, without any additional terms or conditions.
