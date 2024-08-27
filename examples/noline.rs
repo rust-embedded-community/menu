@@ -1,16 +1,69 @@
 extern crate menu;
 
-use embedded_io::Write;
+use embedded_io::{ErrorType, Read as EmbRead, Write as EmbWrite};
 use menu::*;
-use pancurses::{endwin, initscr, noecho, Input};
-use std::convert::Infallible;
+use noline::builder::EditorBuilder;
+use std::io::{self, Read as _, Stdin, Stdout, Write as _};
+use termion::raw::IntoRawMode;
+
+pub struct IOWrapper {
+    stdin: Stdin,
+    stdout: Stdout,
+}
+
+impl IOWrapper {
+    pub fn new() -> Self {
+        Self {
+            stdin: std::io::stdin(),
+            stdout: std::io::stdout(),
+        }
+    }
+}
+
+impl Default for IOWrapper {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ErrorType for IOWrapper {
+    type Error = embedded_io::ErrorKind;
+}
+
+impl EmbRead for IOWrapper {
+    fn read(&mut self, buf: &mut [u8]) -> Result<usize, Self::Error> {
+        Ok(self.stdin.read(buf).map_err(|e| e.kind())?)
+    }
+}
+
+impl EmbWrite for IOWrapper {
+    fn write(&mut self, buf: &[u8]) -> Result<usize, Self::Error> {
+        let mut written = 0;
+        let parts = buf.split(|b| *b == b'\n').collect::<Vec<_>>();
+
+        for (i, part) in parts.iter().enumerate() {
+            written += self.stdout.write(part).map_err(|e| e.kind())?;
+
+            if i != parts.len() - 1 {
+                let _ = self.stdout.write(b"\r\n").map_err(|e| e.kind())?;
+                written += 1;
+            }
+        }
+
+        Ok(written)
+    }
+
+    fn flush(&mut self) -> Result<(), Self::Error> {
+        Ok(self.stdout.flush().map_err(|e| e.kind())?)
+    }
+}
 
 #[derive(Default)]
 struct Context {
     _inner: u32,
 }
 
-const ROOT_MENU: Menu<Output, Context> = Menu {
+const ROOT_MENU: Menu<IOWrapper, Context> = Menu {
     label: "root",
     items: &[
         &Item {
@@ -86,64 +139,34 @@ It contains multiple paragraphs and should be preceeded by the parameter list.
     exit: Some(exit_root),
 };
 
-struct Output(pancurses::Window);
-
-impl embedded_io::ErrorType for Output {
-    type Error = Infallible;
-}
-
-impl Write for Output {
-    fn write(&mut self, buf: &[u8]) -> Result<usize, Self::Error> {
-        self.0.printw(core::str::from_utf8(buf).unwrap());
-        Ok(buf.len())
-    }
-
-    fn flush(&mut self) -> Result<(), Self::Error> {
-        Ok(())
-    }
-}
-
 fn main() {
-    let window = initscr();
-    window.scrollok(true);
-    noecho();
-    let mut buffer = [0u8; 64];
+    let _stdout = io::stdout().into_raw_mode().unwrap();
+
+    let mut io = IOWrapper::new();
+    let mut editor = EditorBuilder::new_unbounded()
+        .with_unbounded_history()
+        .build_sync(&mut io)
+        .unwrap();
+
     let mut context = Context::default();
-    let mut r = Runner::new(ROOT_MENU, &mut buffer, Output(window), &mut context);
-    loop {
-        match r.interface.0.getch() {
-            Some(Input::Character('\n')) => {
-                r.input_byte(b'\r', &mut context);
-            }
-            Some(Input::Character(c)) => {
-                let mut buf = [0; 4];
-                for b in c.encode_utf8(&mut buf).bytes() {
-                    r.input_byte(b, &mut context);
-                }
-            }
-            Some(Input::KeyDC) => break,
-            Some(input) => {
-                r.interface.0.addstr(&format!("{:?}", input));
-            }
-            None => (),
-        }
-    }
-    endwin();
+    let mut r = Runner::new(ROOT_MENU, &mut editor, io, &mut context);
+
+    while let Ok(_) = r.input_line(&mut context) {}
 }
 
-fn enter_root(_menu: &Menu<Output, Context>, interface: &mut Output, _context: &mut Context) {
+fn enter_root(_menu: &Menu<IOWrapper, Context>, interface: &mut IOWrapper, _context: &mut Context) {
     writeln!(interface, "In enter_root").unwrap();
 }
 
-fn exit_root(_menu: &Menu<Output, Context>, interface: &mut Output, _context: &mut Context) {
+fn exit_root(_menu: &Menu<IOWrapper, Context>, interface: &mut IOWrapper, _context: &mut Context) {
     writeln!(interface, "In exit_root").unwrap();
 }
 
 fn select_foo(
-    _menu: &Menu<Output, Context>,
-    item: &Item<Output, Context>,
+    _menu: &Menu<IOWrapper, Context>,
+    item: &Item<IOWrapper, Context>,
     args: &[&str],
-    interface: &mut Output,
+    interface: &mut IOWrapper,
     _context: &mut Context,
 ) {
     writeln!(interface, "In select_foo. Args = {:?}", args).unwrap();
@@ -180,38 +203,38 @@ fn select_foo(
 }
 
 fn select_bar(
-    _menu: &Menu<Output, Context>,
-    _item: &Item<Output, Context>,
+    _menu: &Menu<IOWrapper, Context>,
+    _item: &Item<IOWrapper, Context>,
     args: &[&str],
-    interface: &mut Output,
+    interface: &mut IOWrapper,
     _context: &mut Context,
 ) {
     writeln!(interface, "In select_bar. Args = {:?}", args).unwrap();
 }
 
-fn enter_sub(_menu: &Menu<Output, Context>, interface: &mut Output, _context: &mut Context) {
+fn enter_sub(_menu: &Menu<IOWrapper, Context>, interface: &mut IOWrapper, _context: &mut Context) {
     writeln!(interface, "In enter_sub").unwrap();
 }
 
-fn exit_sub(_menu: &Menu<Output, Context>, interface: &mut Output, _context: &mut Context) {
+fn exit_sub(_menu: &Menu<IOWrapper, Context>, interface: &mut IOWrapper, _context: &mut Context) {
     writeln!(interface, "In exit_sub").unwrap();
 }
 
 fn select_baz(
-    _menu: &Menu<Output, Context>,
-    _item: &Item<Output, Context>,
+    _menu: &Menu<IOWrapper, Context>,
+    _item: &Item<IOWrapper, Context>,
     args: &[&str],
-    interface: &mut Output,
+    interface: &mut IOWrapper,
     _context: &mut Context,
 ) {
     writeln!(interface, "In select_baz: Args = {:?}", args).unwrap();
 }
 
 fn select_quux(
-    _menu: &Menu<Output, Context>,
-    _item: &Item<Output, Context>,
+    _menu: &Menu<IOWrapper, Context>,
+    _item: &Item<IOWrapper, Context>,
     args: &[&str],
-    interface: &mut Output,
+    interface: &mut IOWrapper,
     _context: &mut Context,
 ) {
     writeln!(interface, "In select_quux: Args = {:?}", args).unwrap();

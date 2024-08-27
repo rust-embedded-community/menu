@@ -9,11 +9,15 @@ repository = "https://github.com/rust-embedded-community/menu"
 readme = "README.md"
 
 [dependencies]
-
+embedded-io = "0.6.1"
+noline = { version = "0.5.0", optional = true }
 
 [features]
 default = ["echo"]
 echo = []
 
 [dev-dependencies]
+noline = { version = "0.5.0", features = ["std"] }
 pancurses = "0.16"
+termion = "4.0.2"
+menu = {path = ".", features = ["noline"]}

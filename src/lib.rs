@@ -4,6 +4,11 @@
 //! zero heap allocation.
 #![no_std]
 
+use menu_manager::MenuManager;
+
+#[cfg(feature = "noline")]
+use noline::{error::NolineError, history::History, line_buffer::Buffer, sync_editor::Editor};
+
 pub mod menu_manager;
 
 /// The type of function we call when we enter/exit a menu.
@@ -102,14 +107,15 @@ where
 /// This structure handles the menu. You feed it bytes as they are read from
 /// the console and it executes menu actions when commands are typed in
 /// (followed by Enter).
-pub struct Runner<'a, I, T>
-where
-    I: core::fmt::Write,
-{
-    buffer: &'a mut [u8],
+pub struct Runner<'a, I, T, B: ?Sized> {
+    buffer: &'a mut B,
     used: usize,
-    menu_mgr: menu_manager::MenuManager<'a, I, T>,
     pub interface: I,
+    inner: InnerRunner<'a, I, T>,
+}
+
+struct InnerRunner<'a, I, T> {
+    menu_mgr: menu_manager::MenuManager<'a, I, T>,
 }
 
 /// Describes the ways in which the API can fail
@@ -247,50 +253,124 @@ impl<'a, I, T> core::clone::Clone for Menu<'a, I, T> {
     }
 }
 
-impl<'a, I, T> Runner<'a, I, T>
+#[derive(Clone)]
+enum PromptIterState {
+    Newline,
+    Menu(usize),
+    Arrow,
+    Done,
+}
+
+struct PromptIter<'a, I, T> {
+    menu_mgr: &'a MenuManager<'a, I, T>,
+    state: PromptIterState,
+}
+
+impl<'a, I, T> Clone for PromptIter<'a, I, T> {
+    fn clone(&self) -> Self {
+        Self {
+            menu_mgr: self.menu_mgr,
+            state: self.state.clone(),
+        }
+    }
+}
+
+impl<'a, I, T> PromptIter<'a, I, T> {
+    fn new(menu_mgr: &'a MenuManager<'a, I, T>, newline: bool) -> Self {
+        let state = if newline {
+            PromptIterState::Newline
+        } else {
+            PromptIterState::Menu(0)
+        };
+        Self { menu_mgr, state }
+    }
+}
+
+impl<'a, I, T> Iterator for PromptIter<'a, I, T> {
+    type Item = &'a str;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            match self.state {
+                PromptIterState::Newline => {
+                    self.state = PromptIterState::Menu(0);
+                    break Some("\n");
+                }
+                PromptIterState::Menu(i) => {
+                    if i >= self.menu_mgr.depth() {
+                        self.state = PromptIterState::Arrow;
+                    } else {
+                        let menu = self.menu_mgr.get_menu(Some(i));
+                        self.state = PromptIterState::Menu(i + 1);
+                        break Some(menu.label);
+                    }
+                }
+                PromptIterState::Arrow => {
+                    self.state = PromptIterState::Done;
+                    break Some("> ");
+                }
+                PromptIterState::Done => break None,
+            }
+        }
+    }
+}
+
+impl<'a, I, T, B: ?Sized> Runner<'a, I, T, B>
 where
-    I: core::fmt::Write,
+    I: embedded_io::Write,
 {
     /// Create a new `Runner`. You need to supply a top-level menu, and a
     /// buffer that the `Runner` can use. Feel free to pass anything as the
     /// `context` type - the only requirement is that the `Runner` can
     /// `write!` to the context, which it will do for all text output.
-    pub fn new(
-        menu: Menu<'a, I, T>,
-        buffer: &'a mut [u8],
-        mut interface: I,
-        context: &mut T,
-    ) -> Self {
+    pub fn new(menu: Menu<'a, I, T>, buffer: &'a mut B, mut interface: I, context: &mut T) -> Self {
         if let Some(cb_fn) = menu.entry {
             cb_fn(&menu, &mut interface, context);
         }
         let mut r = Runner {
-            menu_mgr: menu_manager::MenuManager::new(menu),
             buffer,
             used: 0,
             interface,
+            inner: InnerRunner {
+                menu_mgr: menu_manager::MenuManager::new(menu),
+            },
         };
-        r.prompt(true);
+        r.inner.prompt(&mut r.interface, true);
         r
     }
+}
 
-    /// Print out a new command prompt, including sub-menu names if
-    /// applicable.
-    pub fn prompt(&mut self, newline: bool) {
-        if newline {
-            writeln!(self.interface).unwrap();
-        }
-        for i in 0..self.menu_mgr.depth() {
-            if i > 1 {
-                write!(self.interface, "/").unwrap();
-            }
+#[cfg(feature = "noline")]
+impl<'a, I, T, B, H> Runner<'a, I, T, Editor<B, H>>
+where
+    B: Buffer,
+    H: History,
+    I: embedded_io::Read + embedded_io::Write,
+{
+    pub fn input_line(&mut self, context: &mut T) -> Result<(), NolineError> {
+        let prompt = PromptIter::new(&self.inner.menu_mgr, false);
 
-            let menu = self.menu_mgr.get_menu(Some(i));
-            write!(self.interface, "/{}", menu.label).unwrap();
+        let line = self.buffer.readline(prompt, &mut self.interface)?;
+
+        #[cfg(not(feature = "echo"))]
+        {
+            // Echo the command
+            write!(self.interface, "\r").unwrap();
+            write!(self.interface, "{}", line).unwrap();
         }
-        write!(self.interface, "> ").unwrap();
+
+        self.inner
+            .process_command(&mut self.interface, context, line);
+
+        Ok(())
     }
+}
 
+impl<'a, I, T, B> Runner<'a, I, T, B>
+where
+    I: embedded_io::Write,
+    B: AsMut<[u8]>,
+{
     /// Add a byte to the menu runner's buffer. If this byte is a
     /// carriage-return, the buffer is scanned and the appropriate action
     /// performed.
@@ -300,17 +380,24 @@ where
         if input == 0x0A {
             return;
         }
+        let buffer = self.buffer.as_mut();
+
         let outcome = if input == 0x0D {
-            #[cfg(not(feature = "echo"))]
-            {
-                // Echo the command
-                write!(self.interface, "\r").unwrap();
-                if let Ok(s) = core::str::from_utf8(&self.buffer[0..self.used]) {
-                    write!(self.interface, "{}", s).unwrap();
+            if let Ok(line) = core::str::from_utf8(&buffer[0..self.used]) {
+                #[cfg(not(feature = "echo"))]
+                {
+                    // Echo the command
+                    write!(self.interface, "\r").unwrap();
+                    write!(self.interface, "{}", line).unwrap();
                 }
+                // Handle the command
+                self.inner
+                    .process_command(&mut self.interface, context, line);
+            } else {
+                // Hmm ..  we did not have a valid string
+                writeln!(self.interface, "Input was not valid UTF-8").unwrap();
             }
-            // Handle the command
-            self.process_command(context);
+
             Outcome::CommandProcessed
         } else if (input == 0x08) || (input == 0x7F) {
             // Handling backspace or delete
@@ -319,8 +406,8 @@ where
                 self.used -= 1;
             }
             Outcome::NeedMore
-        } else if self.used < self.buffer.len() {
-            self.buffer[self.used] = input;
+        } else if self.used < buffer.len() {
+            buffer[self.used] = input;
             self.used += 1;
 
             #[cfg(feature = "echo")]
@@ -329,14 +416,14 @@ where
                 // a mutable reference to self, and we can't have that while
                 // holding a reference to the buffer at the same time.
                 // This line grabs the buffer, checks it's OK, then releases it again
-                let valid = core::str::from_utf8(&self.buffer[0..self.used]).is_ok();
+                let valid = core::str::from_utf8(&buffer[0..self.used]).is_ok();
                 // Now we've released the buffer, we can draw the prompt
                 if valid {
                     write!(self.interface, "\r").unwrap();
-                    self.prompt(false);
+                    self.inner.prompt(&mut self.interface, false);
                 }
                 // Grab the buffer again to render it to the screen
-                if let Ok(s) = core::str::from_utf8(&self.buffer[0..self.used]) {
+                if let Ok(s) = core::str::from_utf8(&buffer[0..self.used]) {
                     write!(self.interface, "{}", s).unwrap();
                 }
             }
@@ -348,113 +435,128 @@ where
         match outcome {
             Outcome::CommandProcessed => {
                 self.used = 0;
-                self.prompt(true);
+                self.inner.prompt(&mut self.interface, true);
             }
             Outcome::NeedMore => {}
         }
     }
+}
 
-    /// Scan the buffer and do the right thing based on its contents.
-    fn process_command(&mut self, context: &mut T) {
-        // Go to the next line, below the prompt
-        writeln!(self.interface).unwrap();
-        if let Ok(command_line) = core::str::from_utf8(&self.buffer[0..self.used]) {
-            // We have a valid string
-            let mut parts = command_line.split_whitespace();
-            if let Some(cmd) = parts.next() {
-                let menu = self.menu_mgr.get_menu(None);
-                if cmd == "help" {
-                    match parts.next() {
-                        Some(arg) => match menu.items.iter().find(|i| i.command == arg) {
-                            Some(item) => {
-                                self.print_long_help(item);
-                            }
-                            None => {
-                                writeln!(self.interface, "I can't help with {:?}", arg).unwrap();
-                            }
-                        },
-                        _ => {
-                            writeln!(self.interface, "AVAILABLE ITEMS:").unwrap();
-                            for item in menu.items {
-                                self.print_short_help(item);
-                            }
-                            if self.menu_mgr.depth() != 0 {
-                                self.print_short_help(&Item {
-                                    command: "exit",
-                                    help: Some("Leave this menu."),
-                                    item_type: ItemType::_Dummy,
-                                });
-                            }
-                            self.print_short_help(&Item {
-                                command: "help [ <command> ]",
-                                help: Some("Show this help, or get help on a specific command."),
-                                item_type: ItemType::_Dummy,
-                            });
-                        }
-                    }
-                } else if cmd == "exit" && self.menu_mgr.depth() != 0 {
-                    if let Some(cb_fn) = menu.exit {
-                        cb_fn(menu, &mut self.interface, context);
-                    }
-                    self.menu_mgr.pop_menu();
-                } else {
-                    let mut found = false;
-                    for (i, item) in menu.items.iter().enumerate() {
-                        if cmd == item.command {
-                            match item.item_type {
-                                ItemType::Callback {
-                                    function,
-                                    parameters,
-                                } => Self::call_function(
-                                    &mut self.interface,
-                                    context,
-                                    function,
-                                    parameters,
-                                    menu,
-                                    item,
-                                    command_line,
-                                ),
-                                ItemType::Menu(incoming_menu) => {
-                                    if let Some(cb_fn) = incoming_menu.entry {
-                                        cb_fn(incoming_menu, &mut self.interface, context);
-                                    }
-                                    self.menu_mgr.push_menu(i);
-                                }
-                                ItemType::_Dummy => {
-                                    unreachable!();
-                                }
-                            }
-                            found = true;
-                            break;
-                        }
-                    }
-                    if !found {
-                        writeln!(self.interface, "Command {:?} not found. Try 'help'.", cmd)
-                            .unwrap();
-                    }
-                }
-            } else {
-                writeln!(self.interface, "Input was empty?").unwrap();
-            }
-        } else {
-            // Hmm ..  we did not have a valid string
-            writeln!(self.interface, "Input was not valid UTF-8").unwrap();
+impl<'a, I, T> InnerRunner<'a, I, T>
+where
+    I: embedded_io::Write,
+{
+    /// Print out a new command prompt, including sub-menu names if
+    /// applicable.
+    pub fn prompt(&mut self, interface: &mut I, newline: bool) {
+        let prompt = PromptIter::new(&self.menu_mgr, newline);
+
+        for part in prompt {
+            write!(interface, "{}", part).unwrap();
         }
     }
 
-    fn print_short_help(&mut self, item: &Item<I, T>) {
+    /// Scan the buffer and do the right thing based on its contents.
+    fn process_command(&mut self, interface: &mut I, context: &mut T, command_line: &str) {
+        // Go to the next line, below the prompt
+        writeln!(interface).unwrap();
+        // We have a valid string
+        let mut parts = command_line.split_whitespace();
+        if let Some(cmd) = parts.next() {
+            let menu = self.menu_mgr.get_menu(None);
+            if cmd == "help" {
+                match parts.next() {
+                    Some(arg) => match menu.items.iter().find(|i| i.command == arg) {
+                        Some(item) => {
+                            self.print_long_help(interface, item);
+                        }
+                        None => {
+                            writeln!(interface, "I can't help with {:?}", arg).unwrap();
+                        }
+                    },
+                    _ => {
+                        writeln!(interface, "AVAILABLE ITEMS:").unwrap();
+                        for item in menu.items {
+                            self.print_short_help(interface, item);
+                        }
+                        if self.menu_mgr.depth() != 0 {
+                            self.print_short_help(
+                                interface,
+                                &Item {
+                                    command: "exit",
+                                    help: Some("Leave this menu."),
+                                    item_type: ItemType::_Dummy,
+                                },
+                            );
+                        }
+                        self.print_short_help(
+                            interface,
+                            &Item {
+                                command: "help [ <command> ]",
+                                help: Some("Show this help, or get help on a specific command."),
+                                item_type: ItemType::_Dummy,
+                            },
+                        );
+                    }
+                }
+            } else if cmd == "exit" && self.menu_mgr.depth() != 0 {
+                if let Some(cb_fn) = menu.exit {
+                    cb_fn(menu, interface, context);
+                }
+                self.menu_mgr.pop_menu();
+            } else {
+                let mut found = false;
+                for (i, item) in menu.items.iter().enumerate() {
+                    if cmd == item.command {
+                        match item.item_type {
+                            ItemType::Callback {
+                                function,
+                                parameters,
+                            } => Self::call_function(
+                                interface,
+                                context,
+                                function,
+                                parameters,
+                                menu,
+                                item,
+                                command_line,
+                            ),
+                            ItemType::Menu(incoming_menu) => {
+                                if let Some(cb_fn) = incoming_menu.entry {
+                                    cb_fn(incoming_menu, interface, context);
+                                }
+                                self.menu_mgr.push_menu(i);
+                            }
+                            ItemType::_Dummy => {
+                                unreachable!();
+                            }
+                        }
+                        found = true;
+                        break;
+                    }
+                }
+                if !found {
+                    writeln!(interface, "Command {:?} not found. Try 'help'.", cmd).unwrap();
+                }
+            }
+        } else {
+            writeln!(interface, "Input was empty?").unwrap();
+        }
+    }
+
+    fn print_short_help(&mut self, interface: &mut I, item: &Item<I, T>) {
         let mut has_options = false;
         match item.item_type {
             ItemType::Callback { parameters, .. } => {
-                write!(self.interface, "  {}", item.command).unwrap();
+                write!(interface, "  {}", item.command).unwrap();
                 if !parameters.is_empty() {
                     for param in parameters.iter() {
                         match param {
                             Parameter::Mandatory { parameter_name, .. } => {
-                                write!(self.interface, " <{}>", parameter_name).unwrap();
+                                write!(interface, " <{}>", parameter_name).unwrap();
                             }
                             Parameter::Optional { parameter_name, .. } => {
-                                write!(self.interface, " [ <{}> ]", parameter_name).unwrap();
+                                write!(interface, " [ <{}> ]", parameter_name).unwrap();
                             }
                             Parameter::Named { .. } => {
                                 has_options = true;
@@ -467,50 +569,46 @@ where
                 }
             }
             ItemType::Menu(_menu) => {
-                write!(self.interface, "  {}", item.command).unwrap();
+                write!(interface, "  {}", item.command).unwrap();
             }
             ItemType::_Dummy => {
-                write!(self.interface, "  {}", item.command).unwrap();
+                write!(interface, "  {}", item.command).unwrap();
             }
         }
         if has_options {
-            write!(self.interface, " [OPTIONS...]").unwrap();
+            write!(interface, " [OPTIONS...]").unwrap();
         }
-        writeln!(self.interface).unwrap();
+        writeln!(interface).unwrap();
     }
 
-    fn print_long_help(&mut self, item: &Item<I, T>) {
-        writeln!(self.interface, "SUMMARY:").unwrap();
+    fn print_long_help(&mut self, interface: &mut I, item: &Item<I, T>) {
+        writeln!(interface, "SUMMARY:").unwrap();
         match item.item_type {
             ItemType::Callback { parameters, .. } => {
-                write!(self.interface, "  {}", item.command).unwrap();
+                write!(interface, "  {}", item.command).unwrap();
                 if !parameters.is_empty() {
                     for param in parameters.iter() {
                         match param {
                             Parameter::Mandatory { parameter_name, .. } => {
-                                write!(self.interface, " <{}>", parameter_name).unwrap();
+                                write!(interface, " <{}>", parameter_name).unwrap();
                             }
                             Parameter::Optional { parameter_name, .. } => {
-                                write!(self.interface, " [ <{}> ]", parameter_name).unwrap();
+                                write!(interface, " [ <{}> ]", parameter_name).unwrap();
                             }
                             Parameter::Named { parameter_name, .. } => {
-                                write!(self.interface, " [ --{} ]", parameter_name).unwrap();
+                                write!(interface, " [ --{} ]", parameter_name).unwrap();
                             }
                             Parameter::NamedValue {
                                 parameter_name,
                                 argument_name,
                                 ..
                             } => {
-                                write!(
-                                    self.interface,
-                                    " [ --{}={} ]",
-                                    parameter_name, argument_name
-                                )
-                                .unwrap();
+                                write!(interface, " [ --{}={} ]", parameter_name, argument_name)
+                                    .unwrap();
                             }
                         }
                     }
-                    writeln!(self.interface, "\n\nPARAMETERS:").unwrap();
+                    writeln!(interface, "\n\nPARAMETERS:").unwrap();
                     let default_help = "Undocumented option";
                     for param in parameters.iter() {
                         match param {
@@ -519,7 +617,7 @@ where
                                 help,
                             } => {
                                 writeln!(
-                                    self.interface,
+                                    interface,
                                     "  <{0}>\n    {1}\n",
                                     parameter_name,
                                     help.unwrap_or(default_help),
@@ -531,7 +629,7 @@ where
                                 help,
                             } => {
                                 writeln!(
-                                    self.interface,
+                                    interface,
                                     "  <{0}>\n    {1}\n",
                                     parameter_name,
                                     help.unwrap_or(default_help),
@@ -543,7 +641,7 @@ where
                                 help,
                             } => {
                                 writeln!(
-                                    self.interface,
+                                    interface,
                                     "  --{0}\n    {1}\n",
                                     parameter_name,
                                     help.unwrap_or(default_help),
@@ -556,7 +654,7 @@ where
                                 help,
                             } => {
                                 writeln!(
-                                    self.interface,
+                                    interface,
                                     "  --{0}={1}\n    {2}\n",
                                     parameter_name,
                                     argument_name,
@@ -569,14 +667,14 @@ where
                 }
             }
             ItemType::Menu(_menu) => {
-                write!(self.interface, "  {}", item.command).unwrap();
+                write!(interface, "  {}", item.command).unwrap();
             }
             ItemType::_Dummy => {
-                write!(self.interface, "  {}", item.command).unwrap();
+                write!(interface, "  {}", item.command).unwrap();
             }
         }
         if let Some(help) = item.help {
-            writeln!(self.interface, "\n\nDESCRIPTION:\n{}", help).unwrap();
+            writeln!(interface, "\n\nDESCRIPTION:\n{}", help).unwrap();
         }
     }
 
