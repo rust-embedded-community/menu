@@ -18,10 +18,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - name: Build
+    - name: Build (default features)
       run: cargo build
-    - name: Run Tests
+    - name: Build (no features)
+      run: cargo build --no-default-features
+    - name: Build (all features)
+      run: cargo build --all-features
+    - name: Run Tests (default features)
       run: cargo test
+    - name: Run Tests (no features) 
+      run: cargo test --no-default-features
+    - name: Run Tests (all features)
+      run: cargo test --all-features
 
   clippy:
     runs-on: ubuntu-latest
