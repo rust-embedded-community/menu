@@ -280,9 +280,14 @@ impl<'a, I, T> PromptIter<'a, I, T> {
         let state = if newline {
             PromptIterState::Newline
         } else {
-            PromptIterState::Menu(0)
+            Self::first_menu()
         };
         Self { menu_mgr, state }
+    }
+
+    const fn first_menu() -> PromptIterState {
+        // Skip the first menu level which is root
+        PromptIterState::Menu(1)
     }
 }
 
@@ -293,11 +298,11 @@ impl<'a, I, T> Iterator for PromptIter<'a, I, T> {
         loop {
             match self.state {
                 PromptIterState::Newline => {
-                    self.state = PromptIterState::Menu(0);
+                    self.state = Self::first_menu();
                     break Some("\n");
                 }
                 PromptIterState::Menu(i) => {
-                    if i >= self.menu_mgr.depth() {
+                    if i > self.menu_mgr.depth() {
                         self.state = PromptIterState::Arrow;
                     } else {
                         let menu = self.menu_mgr.get_menu(Some(i));
