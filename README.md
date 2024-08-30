@@ -165,6 +165,23 @@ It contains multiple paragraphs and should be preceeded by the parameter list.
 
 ```
 
+## Using with `noline`
+
+The [`noline`](https://crates.io/crates/noline) crate is a no-std line-editor
+with history buffer. You can create a `Runner` using a `noline::Editor` instead
+of a raw byte slice, and then you will get a `pub fn input_line(&mut self,
+context: &mut T) -> Result<(), NolineError>` instead of the `pub fn
+input_byte(&mut self, input: u8, context: &mut T)` you get when you pass a
+mutable byte slice and let `menu` do the input handling. Call `input_line` and
+it will use the `noline::Editor` to read a line of text from the user, with
+history (press 'Up'!) and other nice features.
+
+We chose this option as `noline` offers a bunch of benefits, but we didn't want
+to break everything for people who were quite happy with the basic line editing
+we have already.
+
+See [`examples/noline.rs`](./examples/noline.rs) for an example.
+
 ## Changelog
 
 See [`CHANGELOG.md`](./CHANGELOG.md).
