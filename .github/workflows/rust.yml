@@ -2,19 +2,36 @@ name: Rust
 
 on: [push, pull_request]
 
+# Make sure CI fails on all warnings, including Clippy lints
+env:
+  RUSTFLAGS: "-Dwarnings"
+
 jobs:
   formatting:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v4
     - name: Check formatting
       run: cargo fmt -- --check
 
   build-test:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v4
     - name: Build
       run: cargo build
     - name: Run Tests
       run: cargo test
+
+  clippy:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Clippy (default features)
+      run: cargo clippy
+    - name: Clippy (no features)
+      run: cargo clippy --no-default-features
+    - name: Clippy (all features)
+      run: cargo clippy --all-features
+
+
