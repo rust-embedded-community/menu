@@ -5,9 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [Unreleased](https://github.com/rust-embedded-community/menu/compare/v0.5.1...master)
+## [Unreleased](https://github.com/rust-embedded-community/menu/compare/v0.6.0...master)
 
 * None
+
+## [v0.6.0] - 2024-08-30
+
+### Changed
+
+* We now run clippy in CI
+* Add optional support for [`noline`](https://crates.io/crates/noline) as a line-editor with history 
+* The interface we use for reading and writing bytes must now implement the [`embedded-io`](https://crates.io/crates/embedded-io) traits
 
 ## [v0.5.1] - 2024-08-22
 
@@ -63,6 +71,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 * First release
 
+[v0.6.0]: https://github.com/rust-embedded-community/menu/releases/tag/v0.6.0
 [v0.5.1]: https://github.com/rust-embedded-community/menu/releases/tag/v0.5.1
 [v0.5.0]: https://github.com/rust-embedded-community/menu/releases/tag/v0.5.0
 [v0.4.0]: https://github.com/rust-embedded-community/menu/releases/tag/v0.4.0
