@@ -7,7 +7,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased](https://github.com/rust-embedded-community/menu/compare/v0.6.0...master)
 
-* None
+### Changed
+
+* For `Runner::input_byte` the buffer `B` does not need to be `Sized`
 
 ## [v0.6.0] - 2024-08-30
 

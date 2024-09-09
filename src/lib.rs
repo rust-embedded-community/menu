@@ -374,7 +374,7 @@ where
 impl<'a, I, T, B> Runner<'a, I, T, B>
 where
     I: embedded_io::Write,
-    B: AsMut<[u8]>,
+    B: AsMut<[u8]> + ?Sized,
 {
     /// Add a byte to the menu runner's buffer. If this byte is a
     /// carriage-return, the buffer is scanned and the appropriate action
