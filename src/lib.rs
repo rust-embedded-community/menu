@@ -127,6 +127,14 @@ pub enum Error {
     NotFound,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        core::fmt::Debug::fmt(self, f)
+    }
+}
+
+impl core::error::Error for Error {}
+
 /// Looks for the named parameter in the parameter list of the item, then
 /// finds the correct argument.
 ///

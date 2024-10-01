@@ -7,6 +7,7 @@ license = "MIT OR Apache-2.0"
 edition = "2021"
 repository = "https://github.com/rust-embedded-community/menu"
 readme = "README.md"
+rust-version = "1.81.0"
 
 [dependencies]
 embedded-io = "0.6.1"
