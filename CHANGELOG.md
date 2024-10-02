@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 * For `Runner::input_byte` the buffer `B` does not need to be `Sized`
 
+### Added
+
+* `impl core::error::Error for Error` on rust >= 1.81
+
 ## [v0.6.0] - 2024-08-30
 
 ### Changed

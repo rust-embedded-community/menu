@@ -11,6 +11,7 @@ readme = "README.md"
 [dependencies]
 embedded-io = "0.6.1"
 noline = { version = "0.5.0", optional = true }
+rustversion = "1.0.17"
 
 [features]
 default = ["echo"]
