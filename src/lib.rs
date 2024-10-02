@@ -133,6 +133,7 @@ impl core::fmt::Display for Error {
     }
 }
 
+#[cfg(feature = "error-in-core")]
 impl core::error::Error for Error {}
 
 /// Looks for the named parameter in the parameter list of the item, then
