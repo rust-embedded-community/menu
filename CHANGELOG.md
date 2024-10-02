@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Added
 
-* `impl core::error::Error for Error`
+* `impl core::error::Error for Error` on rust >= 1.81
 
 ## [v0.6.0] - 2024-08-30
 
