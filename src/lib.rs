@@ -275,7 +275,7 @@ struct PromptIter<'a, I, T> {
     state: PromptIterState,
 }
 
-impl<'a, I, T> Clone for PromptIter<'a, I, T> {
+impl<I, T> Clone for PromptIter<'_, I, T> {
     fn clone(&self) -> Self {
         Self {
             menu_mgr: self.menu_mgr,
@@ -380,7 +380,7 @@ where
     }
 }
 
-impl<'a, I, T, B> Runner<'a, I, T, B>
+impl<I, T, B> Runner<'_, I, T, B>
 where
     I: embedded_io::Write,
     B: AsMut<[u8]> + ?Sized,
@@ -456,7 +456,7 @@ where
     }
 }
 
-impl<'a, I, T> InnerRunner<'a, I, T>
+impl<I, T> InnerRunner<'_, I, T>
 where
     I: embedded_io::Write,
 {
