@@ -5,7 +5,9 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [Unreleased](https://github.com/rust-embedded-community/menu/compare/v0.6.0...master)
+## [Unreleased](https://github.com/rust-embedded-community/menu/compare/v0.6.1...master)
+
+## [v0.6.1] - 2024-11-29
 
 ### Changed
 
@@ -47,11 +49,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 * Made `struct Menu` implement `Clone`
 * Add the possibility to disable local echo (via `echo` feature, enabled by default)
 
-## [v0.3.1] - 2019-08-11
+## [v0.3.2] - 2019-08-22
 
 ### Changed
 
-* Updated crate metadata
+* Tidied up help text
+
+## [v0.3.1] - 2019-08-11
+
 
 ## [v0.3.0] - 2019-08-11
 
@@ -77,6 +82,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 * First release
 
+[v0.6.1]: https://github.com/rust-embedded-community/menu/releases/tag/v0.6.1
 [v0.6.0]: https://github.com/rust-embedded-community/menu/releases/tag/v0.6.0
 [v0.5.1]: https://github.com/rust-embedded-community/menu/releases/tag/v0.5.1
 [v0.5.0]: https://github.com/rust-embedded-community/menu/releases/tag/v0.5.0
