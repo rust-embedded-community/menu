@@ -47,11 +47,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 * Made `struct Menu` implement `Clone`
 * Add the possibility to disable local echo (via `echo` feature, enabled by default)
 
-## [v0.3.1] - 2019-08-11
+## [v0.3.2] - 2019-08-22
 
 ### Changed
 
-* Updated crate metadata
+* Tidied up help text
+
+## [v0.3.1] - 2019-08-11
+
 
 ## [v0.3.0] - 2019-08-11
 
